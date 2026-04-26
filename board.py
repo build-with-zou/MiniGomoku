@@ -44,6 +44,27 @@ class Board:
                 return True
         return False
     
+    def is_empty(self):
+        """
+        Check if the board is empty, which can be used to determine if the AI should place the first piece in the center.
+        Return: True if the board is empty, False otherwise.
+        """
+        for row in self.board:
+            for cell in row:
+                if cell != 0:
+                    return False
+        return True
+    
+    def is_full(self):
+        """
+        Check if the board is full, which would indicate a draw if no player has won.
+        Return: True if the board is full, False otherwise.
+        """
+        for row in self.board:
+            if 0 in row:
+                return False
+        return True
+    
     # Print the current state of the board
     def print_board(self):
         print("  " + " ".join(f"{i+1:2}" for i in range(self.size)))  # Print column numbers

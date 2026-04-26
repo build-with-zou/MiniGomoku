@@ -1,8 +1,7 @@
 # File name : main.py
 # Content: A Gomoku game implementation in Python without any imported libraries.
 from AI.base import BaseAI
-from AI.Heuristic_ai import HeuristicAI 
-from AI.Heuristic_ai_depth2 import HeuristicAIDepth2
+from AI.Heuristic_ai_depth import HeuristicAIDepth
 from human import Human
 from board import Board
 
@@ -10,43 +9,59 @@ def main():
     print("Welcome to Gomoku!")
     # Initialize the board size, default is 15x15
     size = 15
-    try:
-        size = int(input("Choose board size (default 15): ") or "15")
-    except ValueError:
-        pass
+    while True:
+        print(f"Enter board size (default {size}):")
+        input_size = input()
+        if input_size == "":
+            break
+        elif input_size.isdigit() and 5 <= int(input_size) :
+            size = int(input_size)
+            break
+        else:
+            print("Invalid input. Please enter a number between 5 and 25, or press Enter to use the default size.")
     board = Board(size)
 
     # Create players based on user choice: Human vs AI or Human vs Human
     print("Do you want to play against the AI? (y/n):")
     cin = input()
-    if cin == 'ai':
-        player1 = HeuristicAI(board,player=1)
-        player2 = HeuristicAIDepth2(board,player=2)
-    
-    else: 
+    if cin == "test":
+        print("Choose an AI difficulty level(from 1 to 4) for player 1:")
+        while True:
+            ai_choice = input("1: Easy, 2: Medium, 3: Hard, 4: Expert (default 3): ")
+            if ai_choice in ['1', '2', '3', '4']:
+                break
+            print("Invalid choice, please enter a number between 1 and 4.")
+        print("Choose an AI difficulty level(from 1 to 4) for player 2:")
+        while True:
+            ai_choice2 = input("1: Easy, 2: Medium, 3: Hard, 4: Expert (default 3): ")
+            if ai_choice2 in ['1', '2', '3', '4']:
+                break
+            print("Invalid choice, please enter a number between 1 and 4.")
+        player1 = HeuristicAIDepth(board, 1, depth=int(ai_choice))
+        player2 = HeuristicAIDepth(board, 2, depth=int(ai_choice2))
+
+    else:
         play_ai = cin.lower() == 'y'
 
         if play_ai:
             print("Do you want to be Player 1 or Player 2? (Enter 1 or 2):")
             human_player = 1 if int(input()) == 1 else 2
             ai_player = 2 if human_player == 1 else 1
-            print("Choose an AI difficulty level: 1 for Heuristic AI, 2 for Heuristic AI Depth 2 :")
-            ai_choice = input("Enter 1 or 2: ")
-            if ai_choice == '1':
-                if human_player == 1:
-                    player1 = Human(board, human_player)
-                    player2 = HeuristicAI(board, ai_player)
-                else:
-                    player1 = HeuristicAI(board, ai_player)
-                    player2 = Human(board, human_player)
-            elif ai_choice == '2':
-                
-                if human_player == 1:
-                    player1 = Human(board, human_player)
-                    player2 = HeuristicAIDepth2(board, ai_player)
-                else:
-                    player1 = HeuristicAIDepth2(board, ai_player)
-                    player2 = Human(board, human_player)
+            print("Choose an AI difficulty level(from 1 to 4):")
+            while True:
+                ai_choice = input("1: Easy, 2: Medium, 3: Hard, 4: Expert (default 3): ") or "3"
+                if ai_choice in ['1', '2', '3', '4']:
+                    break
+                print("Invalid choice, please enter a number between 1 and 4.")
+            if ai_choice not in ['1', '2', '3', '4']:
+                print("Invalid choice, defaulting to level 3.")
+                ai_choice = '3'
+            if ai_player == 1:
+                player1 = HeuristicAIDepth(board, ai_player, depth=int(ai_choice))
+                player2 = Human(board, human_player)
+            else:
+                player1 = Human(board, human_player)
+                player2 = HeuristicAIDepth(board, ai_player, depth=int(ai_choice))
         else:
             player1 = Human(board, 1)
             player2 = Human(board, 2)
