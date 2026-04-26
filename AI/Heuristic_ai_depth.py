@@ -35,7 +35,8 @@ class HeuristicAIDepth(BaseAI):
         if self.board.is_empty():
             # If the board is empty, place the first piece in the center
             return (self.board.size // 2, self.board.size // 2)
-        move, _ = self.minimax(depth=self.depth, alpha=float('-inf'), beta=float('inf'), maximizing=True)
+        base_score = self._evaluate_board(self.player) - self._evaluate_board(self.opponent)
+        move, _ = self.minimax(depth=self.depth, alpha=float('-inf'), beta=float('inf'), maximizing=True, current_score=base_score)
         return move
 
     def make_move(self):
@@ -171,11 +172,70 @@ class HeuristicAIDepth(BaseAI):
 
         return total_score
     
+    def _score_move_one_step(self, row: int, col: int, for_player: int, weight: float = 0.8) -> float:
+        """返回 for_player 在 (row,col) 落子的综合增益（进攻 + 防守）"""
+        if for_player == 1:
+            my_patterns = {
+                '0110': '活二', '01110': '活三', '011110': '活四',
+                '2110': '眠二', '0112': '眠二', '21110': '眠三',
+                '01112': '眠三', '211110': '眠四', '011112': '眠四',
+                '11111': '五',
+            }
+            op_patterns = {
+                '0220': '活二', '02220': '活三', '022220': '活四',
+                '1220': '眠二', '0221': '眠二', '12220': '眠三',
+                '02221': '眠三', '122220': '眠四', '022221': '眠四',
+                '22222': '五',
+            }
+        else:
+            my_patterns = {
+                '0220': '活二', '02220': '活三', '022220': '活四',
+                '1220': '眠二', '0221': '眠二', '12220': '眠三',
+                '02221': '眠三', '122220': '眠四', '022221': '眠四',
+                '22222': '五',
+            }
+            op_patterns = {
+                '0110': '活二', '01110': '活三', '011110': '活四',
+                '2110': '眠二', '0112': '眠二', '21110': '眠三',
+                '01112': '眠三', '211110': '眠四', '011112': '眠四',
+                '11111': '五',
+            }
+
+        directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
+
+        # 落子前两条线分
+        old_my = 0
+        old_op = 0
+        for dr, dc in directions:
+            line = self._get_line_string(row, col, dr, dc)
+            old_my += self._evaluate_line(line, my_patterns)
+            old_op += self._evaluate_line(line, op_patterns)
+
+        # 玩家落子后的进攻增益
+        self.board.board[row][col] = for_player
+        new_my = 0
+        for dr, dc in directions:
+            line = self._get_line_string(row, col, dr, dc)
+            new_my += self._evaluate_line(line, my_patterns)
+        attack_gain = new_my - old_my
+
+        # 对手落子后的防守增益
+        self.board.board[row][col] = 3 - for_player  # 换成对手
+        new_op = 0
+        for dr, dc in directions:
+            line = self._get_line_string(row, col, dr, dc)
+            new_op += self._evaluate_line(line, op_patterns)
+        defense_gain = new_op - old_op
+
+        self.board.board[row][col] = 0  # 恢复
+        return attack_gain + weight * defense_gain          
+                    
+    
     # The minimax algorithm with alpha-beta pruning to evaluate the best move for the AI.
-    def minimax(self, depth: int, alpha: float, beta: float, maximizing: bool,weight = 0.8):
+    def minimax(self, depth: int, alpha: float, beta: float, maximizing: bool,current_score = 0, weight = 0.8):
         # The base case for the recursion: if we've reached the maximum depth or the board is full, evaluate the board and return the score.
         if depth == 0 or self.board.is_full():
-            return None, self._evaluate_board(for_player=self.player) - weight * self._evaluate_board(for_player=3-self.player)
+            return None, current_score
 
         candidates = self.get_candidate(radius=2)
 
@@ -185,14 +245,15 @@ class HeuristicAIDepth(BaseAI):
 
             for r, c in candidates:
                 self.board.board[r][c] = self.player
-
+                gain = self._score_move_one_step(r, c, self.player)
+                new_score = current_score + gain
                 # Immediate win → return this move with the maximum score
                 if self.board.check_win(self.player, [r, c]):
                     self.board.board[r][c] = 0
                     return (r, c), float('inf')
 
                 # Recursively search the next level (opponent's turn)
-                _, score = self.minimax(depth - 1, alpha, beta, False)
+                _, score = self.minimax(depth - 1, alpha, beta, False, new_score)
                 self.board.board[r][c] = 0
 
                 if score > max_eval:
@@ -214,12 +275,14 @@ class HeuristicAIDepth(BaseAI):
 
             for r, c in candidates:
                 self.board.board[r][c] = opponent
+                opponent_gain = self._score_move_one_step(r, c, opponent)
+                new_score = current_score - opponent_gain
 
                 if self.board.check_win(opponent, [r, c]):
                     self.board.board[r][c] = 0
                     return (r, c), float('-inf')
 
-                _, score = self.minimax(depth - 1, alpha, beta, True)
+                _, score = self.minimax(depth - 1, alpha, beta, True, new_score)
                 self.board.board[r][c] = 0
 
                 if score < min_eval:
