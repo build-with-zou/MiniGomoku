@@ -1,4 +1,3 @@
-
 **中文README附在英文README后面，供中文用户参考。英文README是主版本，中文README会定期同步更新。**
 # 🎯 Gomoku – Python Implementation
 
@@ -17,10 +16,12 @@ A pure Python implementation of the classic Gomoku (Five in a Row) board game. N
 - ✅ **Multiple AI difficulties**:
   - `HeuristicAI` – greedy one‑step pattern scoring (fast)
   - `HeuristicAIDepth` – configurable depth minimax search with **alpha‑beta pruning** and incremental evaluation (depth 1–4)
+  - **Forced threat detection** – AI recognizes and immediately responds to live‑four, rush‑four, and double‑three threats
 - ✅ **Graphical User Interface (GUI)** using built‑in `tkinter` – click to play, with status bar and restart
 - ✅ **Human vs AI**, **Human vs Human**, and **AI vs AI** (test mode) in command line, plus GUI versions of all modes
 - ✅ **Unified player interface**: human and AI players are treated identically, making it easy to add new AI opponents
 - ✅ Incremental board evaluation for fast move scoring (only affected lines recomputed)
+- ✅ **Pattern module** – all pattern dictionaries and scoring weights are centralized in `pattern.py` for easy customization and future automatic tuning
 
 ---
 
@@ -69,7 +70,8 @@ python gui.py
 │   ├── base.py                   # Abstract base class for all AI players
 │   ├── Heuristic_ai.py           # Greedy one‑step heuristic AI
 │   ├── Heuristic_ai_depth2.py    # (Legacy) 2‑ply minimax AI (kept for reference)
-│   └── Heuristic_ai_depth.py     # Configurable‑depth minimax AI with alpha‑beta pruning
+│   ├── Heuristic_ai_depth.py     # Configurable‑depth minimax AI with alpha‑beta pruning
+│   └── pattern.py                # Pattern definitions and scoring weights
 └── README.md                     # Project documentation
 ```
 
@@ -106,7 +108,12 @@ A fast greedy scoring AI that evaluates only the four lines passing through each
 **The main AI for adjustable difficulty.**  
 Uses a minimax search with **alpha‑beta pruning** and **candidate pruning** (only cells near existing stones). The search depth is configurable (default 3).  
 To keep the search fast, it employs **incremental evaluation**: it maintains a total board score and updates it only along the four lines affected by a simulated move, avoiding full‑board scans during search. Immediate win/loss detection terminates the search early.  
+**Forced threat detection** is integrated: the AI automatically recognizes live‑four, rush‑four, and double‑three threats both in search and at the root, and responds with the highest priority.  
 Set `depth=1` for greedy strength, `depth=2` for basic tactics, `depth=3‑4` for stronger play (requires more CPU time at depth 4).
+
+### `Pattern`
+
+Centralizes all pattern dictionaries and scoring weights for the heuristic evaluation. It is used by `HeuristicAIDepth` and can be easily modified to experiment with new patterns or to prepare for automatic weight tuning (e.g., genetic algorithms).
 
 ### `Human(BaseAI)`
 
@@ -123,9 +130,10 @@ Implements the same interface as AI players, obtaining moves from console input.
 - [x] Incremental evaluation for speed
 - [x] Human vs AI gameplay (console + GUI)
 - [x] Modular player interface for easy AI swapping
+- [x] Forced threat detection (live‑four, rush‑four, double‑three)
 
 ### 📌 Phase 2: Stronger Search & Automatic Tuning
-- [ ] Add quiescence search / better horizon‑effect handling
+- [ ] Add quiescence search / better horizon‑effect handling for deeper searches
 - [ ] Use genetic algorithms to automatically tune scoring weights and defense weight
 - [ ] Add more sophisticated patterns (jump‑three, jump‑four, double‑threat recognition)
 
@@ -150,9 +158,9 @@ Implements the same interface as AI players, obtaining moves from console input.
 
 1. **Hand‑tuned scoring weights** – Pattern scores and the defense weight are manually set and could be suboptimal.  
    *Plan: apply genetic algorithms to discover better weights.*
-2. **Limited pattern set** – Only continuous lines are considered; jump‑three, jump‑four, and double‑threat patterns are missing.  
+2. **Limited pattern set** – Only continuous lines are considered; jump‑three, jump‑four, and double‑threat patterns (beyond simple detection) are missing.  
    *Plan: extend the pattern library for finer positional judgment.*
-3. **Horizon effect** – Even with depth 4, the AI may push threats beyond the search horizon, leading to occasional mis‑evaluations.  
+3. **Horizon effect** – Even with depth 4, the AI may push threats beyond the search horizon, though forced threat detection greatly reduces practical mis‑evaluations.  
    *Plan: implement quiescence search or a more sensitive evaluation around potential wins.*
 4. **No opening book** – The AI relies entirely on search from the first move.  
    *Plan: add a small opening book or use self‑play data to learn openings.*
@@ -193,10 +201,12 @@ Issues and Pull Requests are welcome! Areas where contributions are especially a
 - ✅ **多种 AI 难度**：
   - `HeuristicAI` – 贪心一步评分（快速）
   - `HeuristicAIDepth` – 可调深度的极小极大搜索，带 **Alpha‑Beta 剪枝** 和增量评估（深度 1‑4）
+  - **强制威胁检测** – AI 能自动识别并立即应对活四、冲四及双活三等杀棋威胁
 - ✅ **图形用户界面（GUI）**（基于内置 `tkinter`）– 点击落子，状态栏提示，支持重新开始
 - ✅ 支持 **人机对战**、**人人对战** 以及 **AI 对 AI 测试**（命令行），GUI 也包含前两种模式
 - ✅ **统一的玩家接口**：人类与 AI 被同等对待，易于增加新的 AI 对手
 - ✅ 增量棋盘评估：每次只计算落子点相关线条的分数变化，大幅提高搜索速度
+- ✅ **Pattern 模块** – 所有模式字典和评分权重集中管理，便于定制和将来自动调参
 
 ---
 
@@ -245,7 +255,8 @@ python gui.py
 │   ├── base.py                   # 所有 AI 的抽象基类
 │   ├── Heuristic_ai.py           # 贪心一步启发式 AI
 │   ├── Heuristic_ai_depth2.py    # （旧版）2层极小极大 AI（保留作为参考）
-│   └── Heuristic_ai_depth.py     # 可调深度的极小极大 AI（带 Alpha‑Beta 剪枝）
+│   ├── Heuristic_ai_depth.py     # 可调深度的极小极大 AI（带 Alpha‑Beta 剪枝）
+│   └── pattern.py                # 模式定义与评分权重
 └── README.md                     # 项目说明文档
 ```
 
@@ -282,7 +293,12 @@ python gui.py
 **可调节难度的主要 AI。**  
 采用带 **Alpha‑Beta 剪枝** 的极小极大搜索，并利用**候选点剪枝**（只搜索棋子周围空位）。搜索深度可通过 `depth` 参数设定（默认 3）。  
 为保证搜索速度，使用了**增量评估**：维护一个全局总分，每次模拟落子仅更新受影响的四条线，叶子节点直接返回总分，无需全盘重新扫描。搜索中遇到连五会立即返回。  
+**强制威胁检测** 已集成：AI 在搜索和根节点均能自动识别活四、冲四、双活三等紧急情况，并以最高优先级应对。  
 设置 `depth=1` 可获得贪心强度，`depth=2` 获得基础战术，`depth=3‑4` 则更强（深度 4 时计算时间稍长）。
+
+### `Pattern`
+
+集中管理启发式评估所需的所有模式字典和评分权重，被 `HeuristicAIDepth` 使用。只需修改该模块即可快速实验新模式或为自动调参（如遗传算法）做准备。
 
 ### `Human(BaseAI)`
 
@@ -299,11 +315,12 @@ python gui.py
 - [x] 增量评估加速搜索
 - [x] 支持人机对战（命令行 + GUI）
 - [x] 模块化玩家接口，便于替换不同 AI
+- [x] 强制威胁检测（活四、冲四、双活三）
 
 ### 📌 第二阶段：更强的搜索与自动调参
-- [ ] 添加静态搜索以缓解地平线效应
+- [ ] 添加静态搜索以进一步缓解深层次地平线效应
 - [ ] 使用遗传算法自动优化评分权重及防守权重
-- [ ] 增加更丰富的棋形（跳活三、跳冲四、双重威胁等）
+- [ ] 增加更丰富的棋形（跳活三、跳冲四、双重威胁识别等）
 
 ### 📌 第三阶段：深度强化学习（AlphaZero 风格）
 - [ ] 使用 PyTorch 构建残差神经网络（策略+价值双输出）
@@ -326,9 +343,9 @@ python gui.py
 
 1. **手工设定的评分权重** – 棋形分值和防守权重均为人工设定，可能并非最优。  
    *改进：用遗传算法自动寻找更优权重。*
-2. **棋形模式有限** – 仅识别连续线型，缺少跳活三、跳冲四、双威胁等形状。  
+2. **棋形模式有限** – 当前主要识别连续线型，对于跳活三、跳冲四等特殊形状支持不足。  
    *改进：扩展模式库，提升局面判断精度。*
-3. **地平线效应** – 即使深度为 4，AI 仍可能将威胁推到搜索范围之外，导致误判。  
+3. **地平线效应** – 深度较大时仍可能将威胁推到搜索范围之外，但强制威胁检测已大幅减少实际误判。  
    *改进：实现静态搜索或增强对潜在杀棋的敏感度。*
 4. **无开局知识** – AI 开局完全依赖搜索，缺乏定式。  
    *改进：可添加小型开局库，或通过自对弈数据学习开局。*
