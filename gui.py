@@ -106,22 +106,30 @@ class GomokuGUI:
         self.canvas.delete("all")
         s = self.cell_size
         n = self.size
-        # Draw grid lines
+        # grid lines
         for i in range(n):
-            # Horizontal lines
             self.canvas.create_line(s, s + i * s, s * n, s + i * s)
-            # Vertical lines
             self.canvas.create_line(s + i * s, s, s + i * s, s * n)
         
-        # Star points (can mark the center and stars)
-        star_points = [(4, 4), (4, 10), (10, 4), (10, 10), (7, 7)]
+        # star points (dynamic)
+        star_points = set()
+        center = n // 2
+        star_points.add((center, center))
+        if n >= 9:
+            offset = 3
+            if offset < center:
+                star_points.update([
+                    (offset, offset),
+                    (offset, n - 1 - offset),
+                    (n - 1 - offset, offset),
+                    (n - 1 - offset, n - 1 - offset)
+                ])
         for r, c in star_points:
-            if r < n and c < n:
-                x = s * (c + 1)
-                y = s * (r + 1)
-                self.canvas.create_oval(x-3, y-3, x+3, y+3, fill="black")
+            x = s * (c + 1)
+            y = s * (r + 1)
+            self.canvas.create_oval(x-3, y-3, x+3, y+3, fill="black")
         
-        # Redraw all pieces based on the board data (used for restarting)
+        # Redraw all pieces
         for r in range(n):
             for c in range(n):
                 piece = self.board.board[r][c]
