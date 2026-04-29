@@ -9,12 +9,13 @@ from typing import Optional, Tuple, List
 from AI.pattern import Pattern
 
 class HeuristicAIDepth(BaseAI):
-    def __init__(self, board, player: int, depth: int = 3):
+    def __init__(self, board, player: int, depth: int = 3,weights = None):
         super().__init__(board, player)
-        self.pattern = Pattern(player)
+        self.pattern = Pattern(player,weights)
         self.opponent = 2 if player == 1 else 1
         self.depth = depth
         self.shape_score = self.pattern.pattern_score
+        self.defensive_weight = self.pattern.defensive_weight
 
     # ---------- Main entry ----------
     def get_move(self) -> Optional[Tuple[int, int]]:
@@ -185,7 +186,9 @@ class HeuristicAIDepth(BaseAI):
         return total
 
     # ---------- Incremental move score ----------
-    def _score_move_one_step(self, row, col, for_player, weight=0.5):
+    def _score_move_one_step(self, row, col, for_player, weight = None):
+        if weight is None:
+            weight = self.defensive_weight
         my_patterns = self.pattern.get_pattern(for_player)
         op_patterns = self.pattern.get_pattern(3 - for_player)
         directions = [(0,1),(1,0),(1,1),(1,-1)]
@@ -222,6 +225,7 @@ class HeuristicAIDepth(BaseAI):
         candidates = self.get_candidate(radius=2)
 
         if maximizing:
+            candidates = sorted(candidates, key=lambda move: self._score_move_one_step(move[0], move[1], self.player), reverse=True)
             best_move = []
             max_eval = -float('inf')
             for r, c in candidates:
@@ -248,6 +252,7 @@ class HeuristicAIDepth(BaseAI):
                     break
             return random.choice(best_move), max_eval
         else:
+            candidates = sorted(candidates, key=lambda move: self._score_move_one_step(move[0], move[1], self.opponent, weight=self.defensive_weight), reverse=True)
             best_move = []
             min_eval = float('inf')
             opponent = 3 - self.player

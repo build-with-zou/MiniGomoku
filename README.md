@@ -22,6 +22,7 @@ A pure Python implementation of the classic Gomoku (Five in a Row) board game. N
 - ✅ **Unified player interface**: human and AI players are treated identically, making it easy to add new AI opponents
 - ✅ Incremental board evaluation for fast move scoring (only affected lines recomputed)
 - ✅ **Pattern module** – all pattern dictionaries and scoring weights are centralized in `pattern.py` for easy customization and future automatic tuning
+- ✅ **Genetic algorithm training framework** – the AI’s evaluation weights can be automatically optimized via a genetic algorithm; the training pipeline (`training/` directory) is fully implemented and ready for experiments
 
 ---
 
@@ -71,11 +72,16 @@ python gui.py
 │   ├── Heuristic_ai.py           # Greedy one‑step heuristic AI
 │   ├── Heuristic_ai_depth2.py    # (Legacy) 2‑ply minimax AI (kept for reference)
 │   ├── Heuristic_ai_depth.py     # Configurable‑depth minimax AI with alpha‑beta pruning
-│   └── pattern.py                # Pattern definitions and scoring weights
+│   └── pattern.py                # Pattern definitions and scoring weights (supports GA chromosomes)
+├── training/
+│   ├── config.py                 # Gene bounds, chromosome length, default weights
+│   ├── arena.py                  # Headless game engine and fitness evaluation
+│   ├── genetic.py                # Genetic operators (selection, crossover, mutation) and GA loop
+│   └── run_tuning.py             # Entry point to start GA training
 └── README.md                     # Project documentation
 ```
 
-> *Note: All game‑specific logic (Board, players, AI) is cleanly separated into dedicated modules. The GUI is fully decoupled from the command‑line interface.*
+> *Note: All game‑specific logic (Board, players, AI) is cleanly separated into dedicated modules. The GUI is fully decoupled from the command‑line interface. The training pipeline is also independent and can be run without the GUI.*
 
 ---
 
@@ -109,13 +115,22 @@ A fast greedy scoring AI that evaluates only the four lines passing through each
 Uses a minimax search with **alpha‑beta pruning** and **candidate pruning** (only cells near existing stones). The search depth is configurable (default 3).  
 To keep the search fast, it employs **incremental evaluation**: it maintains a total board score and updates it only along the four lines affected by a simulated move, avoiding full‑board scans during search.  
 A **quiescence search** extends the search at leaf nodes to examine compulsory moves (live‑four, rush‑four, double‑three), greatly reducing horizon‑effect blunders.  
-**Threat detection is now role‑aware**: the AI treats its own rush‑four, live‑four, and double‑three as immediate winning moves, while only block the opponent’s truly unstoppable threats (one‑move wins, live‑four, double‑three). This prevents over‑defending against minor opponent patterns while maintaining a sharp offensive eye.  
+**Threat detection is now role‑aware**: the AI treats its own rush‑four, live‑four, and double‑three as immediate winning moves, while only blocking the opponent’s truly unstoppable threats (one‑move wins, live‑four, double‑three). This prevents over‑defending against minor opponent patterns while maintaining a sharp offensive eye.  
 An **immediate win check** at the root ensures the AI never overlooks a direct winning move, even if that move lies outside the usual candidate set.  
+The AI can also accept an optional `weights` parameter (a chromosome) that directly sets its evaluation parameters, enabling seamless integration with the genetic algorithm training pipeline.  
 Set `depth=1` for greedy strength, `depth=2` for basic tactics, `depth=3‑4` for stronger play (requires more CPU time at depth 4).
 
 ### `Pattern`
 
-Centralizes all pattern dictionaries and scoring weights for the heuristic evaluation. It is used by `HeuristicAIDepth` and can be easily modified to experiment with new patterns or to prepare for automatic weight tuning (e.g., genetic algorithms).
+Centralizes all pattern dictionaries and scoring weights for the heuristic evaluation. It now supports receiving a chromosome (list of 10 values) via `set_weights()` or the constructor, which instantly reconfigures the evaluation function. This makes it the bridge between the AI and the genetic algorithm optimizer.
+
+### `Training` module
+
+The `training/` directory contains a self‑contained pipeline for automatically tuning the AI’s evaluation weights:
+- `config.py` – defines the search space (gene bounds) and default chromosome.
+- `arena.py` – provides a headless game engine (`play_game`) and a fitness function (`compute_fitness`) that evaluates a chromosome by playing against a fixed opponent.
+- `genetic.py` – implements tournament selection, uniform crossover, gaussian mutation, and the main `run_ga` loop.
+- `run_tuning.py` – entry point that starts the GA and saves the best chromosome to a JSON file.
 
 ### `Human(BaseAI)`
 
@@ -137,7 +152,7 @@ Implements the same interface as AI players, obtaining moves from console input.
 
 ### 📌 Phase 2: Stronger Search & Automatic Tuning
 - [ ] Improve move ordering for deeper pruning
-- [ ] Use genetic algorithms to automatically tune scoring weights and defense weight
+- [x] **Genetic algorithm training framework** – chromosome‑based weight optimization pipeline fully implemented (GA loop, fitness evaluation, etc.)
 - [ ] Add more sophisticated patterns (jump‑three, jump‑four, double‑threat recognition)
 
 ### 📌 Phase 3: Deep Reinforcement Learning (AlphaZero Style)
@@ -159,8 +174,8 @@ Implements the same interface as AI players, obtaining moves from console input.
 
 ## ⚠️ Current Limitations & Near‑Term Improvements
 
-1. **Hand‑tuned scoring weights** – Pattern scores and the defense weight are manually set and could be suboptimal.  
-   *Plan: apply genetic algorithms to discover better weights.*
+1. **Scoring weights can now be automatically optimized** – The genetic algorithm framework is fully implemented, but large‑scale training runs are still pending. Running the GA with sufficient generations will yield an optimized set of weights.  
+   *Plan: execute long‑running GA experiments and integrate the best chromosome into the default AI.*
 2. **Limited pattern set** – Only continuous lines are considered; jump‑three, jump‑four, and double‑threat patterns (beyond simple detection) are missing.  
    *Plan: extend the pattern library for finer positional judgment.*
 3. **Horizon effect in complex forced sequences** – Although quiescence search and forced‑threat detection have greatly reduced mis‑evaluations, very long forced win sequences can still be truncated at extreme depths.  
@@ -210,6 +225,7 @@ Issues and Pull Requests are welcome! Areas where contributions are especially a
 - ✅ **统一的玩家接口**：人类与 AI 被同等对待，易于增加新的 AI 对手
 - ✅ 增量棋盘评估：每次只计算落子点相关线条的分数变化，大幅提高搜索速度
 - ✅ **Pattern 模块** – 所有模式字典和评分权重集中管理，便于定制和将来自动调参
+- ✅ **遗传算法训练框架** – AI 的评估权重可以通过遗传算法自动优化；训练管道（`training/` 目录）已完全实现，可随时运行实验
 
 ---
 
@@ -259,11 +275,16 @@ python gui.py
 │   ├── Heuristic_ai.py           # 贪心一步启发式 AI
 │   ├── Heuristic_ai_depth2.py    # （旧版）2层极小极大 AI（保留作为参考）
 │   ├── Heuristic_ai_depth.py     # 可调深度的极小极大 AI（带 Alpha‑Beta 剪枝）
-│   └── pattern.py                # 模式定义与评分权重
+│   └── pattern.py                # 模式定义与评分权重（支持染色体参数）
+├── training/
+│   ├── config.py                 # 基因范围、染色体长度、默认权重
+│   ├── arena.py                  # 无渲染对局引擎与适应度评估
+│   ├── genetic.py                # 遗传算子（选择、交叉、变异）与GA主循环
+│   └── run_tuning.py             # 启动GA训练的入口脚本
 └── README.md                     # 项目说明文档
 ```
 
-> *注：游戏逻辑 (Board, players, AI) 完全分离，GUI 与命令行界面彼此独立。*
+> *注：游戏逻辑 (Board, players, AI) 完全分离，GUI 与命令行界面彼此独立。训练模块同样独立，可不依赖 GUI 运行。*
 
 ---
 
@@ -299,11 +320,20 @@ python gui.py
 在叶子节点集成了**静态搜索**，能继续探索活四、冲四、双活三等强制走法，有效缓解地平线效应。  
 **威胁检测已实现角色分离**：AI 将自己的冲四、活四、双活三视为立即获胜的走法，而对对手的防守则只针对真正无法补救的威胁（直接连五、活四、双活三），避免对眠三等次要棋型的过度防守。  
 在根节点增加了**立即获胜检查**，确保 AI 不会遗漏任何直接连五的机会（即使该点不在常规候选范围内）。  
+AI 还可接受一个可选的 `weights` 参数（染色体），直接设定其评估参数，从而与遗传算法训练管道无缝集成。  
 设置 `depth=1` 可获得贪心强度，`depth=2` 获得基础战术，`depth=3‑4` 则更强（深度 4 时计算时间稍长）。
 
 ### `Pattern`
 
-集中管理启发式评估所需的所有模式字典和评分权重，被 `HeuristicAIDepth` 使用。只需修改该模块即可快速实验新模式或为自动调参（如遗传算法）做准备。
+集中管理启发式评估所需的所有模式字典和评分权重。现在支持通过 `set_weights()` 或构造函数接收染色体（10个值的列表），即时重新配置评估函数，成为 AI 与遗传算法优化器之间的桥梁。
+
+### `Training` 模块
+
+`training/` 目录包含自动调优 AI 评估权重的完整管道：
+- `config.py` – 定义搜索空间（基因边界）和默认染色体。
+- `arena.py` – 提供无渲染对局引擎 (`play_game`) 和适应度函数 (`compute_fitness`)，通过让染色体与固定对手对战来评估其优劣。
+- `genetic.py` – 实现锦标赛选择、均匀交叉、高斯变异以及主循环 `run_ga`。
+- `run_tuning.py` – 启动 GA 训练并将最优染色体保存为 JSON 文件的入口。
 
 ### `Human(BaseAI)`
 
@@ -325,7 +355,7 @@ python gui.py
 
 ### 📌 第二阶段：更强的搜索与自动调参
 - [ ] 走法排序以提升剪枝效率
-- [ ] 使用遗传算法自动优化评分权重及防守权重
+- [x] **遗传算法训练框架** – 基于染色体的权重优化管道已全部实现（GA循环、适应度评估等）
 - [ ] 增加更丰富的棋形（跳活三、跳冲四、双重威胁识别等）
 
 ### 📌 第三阶段：深度强化学习（AlphaZero 风格）
@@ -347,8 +377,8 @@ python gui.py
 
 ## ⚠️ 当前局限与近期改进方向
 
-1. **手工设定的评分权重** – 棋形分值和防守权重均为人工设定，可能并非最优。  
-   *改进：用遗传算法自动寻找更优权重。*
+1. **评分权重现在可以自动优化** – 遗传算法框架已完全实现，但大规模训练尚未进行。运行足够代数的 GA 将会产生一组优化的权重。  
+   *改进：执行长时间 GA 实验，并将最优染色体整合为默认 AI 参数。*
 2. **棋形模式有限** – 当前主要识别连续线型，对于跳活三、跳冲四等特殊形状支持不足。  
    *改进：扩展模式库，提升局面判断精度。*
 3. **复杂连续对杀中的地平线效应** – 虽然静态搜索和强制威胁检测已大幅减少误判，极长强制序列仍可能被截断。  
@@ -371,4 +401,3 @@ python gui.py
 ---
 
 **Enjoy the game! 🎲**
-
