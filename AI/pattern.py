@@ -6,8 +6,7 @@ class Pattern:
         self.player = player
         self.opponent = 2 if player == 1 else 1
         self.defensive_weight = 0.5  # Default defensive weight, can be adjusted by genetic algorithm
-        if weights is not None:
-            self.set_weights(weights)
+        
         if self.player == 1:
             self.pattern = {
                 '0110': '活二',
@@ -70,6 +69,7 @@ class Pattern:
                 '011112': '眠四',
                 '11111': '五',
             }
+
         self.pattern_score = {
             "potential": {
                 '活二': 10,
@@ -86,6 +86,9 @@ class Pattern:
             }
         }
 
+        if weights is not None:
+            self.set_weights(weights)
+            
     def get_pattern(self,player):
         """Return the pattern dictionary for the given player"""
         if player == self.player:

@@ -3,14 +3,18 @@
 
 import sys
 from pathlib import Path
-
+import os
 # add parent directory to sys.path to allow imports from AI and Training modules
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import csv
 import random
 import copy
 from Training.config import GENE_BOUNDS, CHROM_LENGTH, DEFAULT_CHROM
 from Training.arena import compute_fitness
+
+history = []  # To store the history of generations for analysis
+os.makedirs("training/output", exist_ok=True)  # Ensure output directory exists
 
 def random_chromosome():
     """Generate a random chromosome within the specified gene bounds"""
@@ -84,30 +88,32 @@ def run_ga(pop_size=20, generations=30, opponent_chrom=None,
     # 1. Ensure opponent chromosome is set
     if opponent_chrom is None:
         opponent_chrom = DEFAULT_CHROM[:]
-
+    
     # 2. Initialize population with random chromosomes
     population = [random_chromosome() for _ in range(pop_size)]
-    # Put the default chromosome into the population (provides a known good starting point)
-    population[0] = DEFAULT_CHROM[:]
+    # Seed with default chromosome is optional; currently commented out
 
     best_chrom = None
     best_fitness = 0.0
 
     # 3. Main evolution loop
     for gen in range(generations):
-        # 3.1 Evaluate fitness of each chromosome in the population
+        print(f"===== Generation {gen+1}/{generations} =====")
         scores = []
-        for chrom in population:
+        for idx, chrom in enumerate(population):
+            print(f"Evaluating chromosome {idx+1}/{pop_size}...")
             fitness = compute_fitness(chrom, opponent_chrom,
                                       num_games=num_games, depth=depth)
             scores.append(fitness)
+            print(f"  Fitness = {fitness:.3f}")
 
         # 3.2 Find the best individual in this generation and update the global best
         current_best_idx = max(range(len(scores)), key=lambda i: scores[i])
+        print(f"Gen {gen}: best fitness = {scores[current_best_idx]:.3f}, chromosome = {population[current_best_idx]}")
         if scores[current_best_idx] > best_fitness:
             best_fitness = scores[current_best_idx]
             best_chrom = population[current_best_idx][:]
-            print(f"Gen {gen}: new best fitness = {best_fitness:.3f}")
+            print(f"  --> New global best: {best_fitness:.3f}")
 
         # 3.3 Elite selection: keep the top elite_ratio% of the population
         sorted_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
@@ -133,8 +139,13 @@ def run_ga(pop_size=20, generations=30, opponent_chrom=None,
         # Replace the old population with the new one
         population = new_pop
 
-        # Print average fitness of the current generation for monitoring
+        # Print statistics
         avg_fitness = sum(scores) / len(scores)
-        print(f"Gen {gen} avg fitness: {avg_fitness:.3f}")
-
+        history.append([gen, max(scores), min(scores), avg_fitness])
+        print(f"Gen {gen}: max={max(scores):.3f}, min={min(scores):.3f}, avg={avg_fitness:.3f}\n")
+        
+    with open("training/output/history.csv", "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["gen", "max", "min", "avg"])
+        writer.writerows(history)
     return best_chrom, best_fitness
