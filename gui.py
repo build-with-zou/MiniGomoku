@@ -6,6 +6,8 @@ import tkinter as tk
 from tkinter import messagebox, simpledialog
 from board import Board
 from AI.Heuristic_ai_depth import HeuristicAIDepth
+import json
+import os
 
 class GomokuGUI:
     def __init__(self):
@@ -23,6 +25,10 @@ class GomokuGUI:
         self.board = None       # Board instance
         self.current_player = 1
         self.game_over = False
+
+        # GA weights settings
+        self.use_ga_weights = False
+        self.ga_weights_path = None
         
         # Start game setup
         self.setup_game()
@@ -67,14 +73,31 @@ class GomokuGUI:
             if depth is None:
                 return
             self.depth = depth
-            
+
+            # Ask for GA weights
+            use_ga = messagebox.askyesno("Optimized Weights", "Use GA optimized weights?")
+            self.use_ga_weights = use_ga
+            if use_ga:
+                default_path = f"Training/output/best_chrom_depth_{self.depth}.json"
+                filepath = simpledialog.askstring("Weights File", f"Enter weights file path (default: {default_path}):", initialvalue=default_path)
+                if filepath and os.path.exists(filepath):
+                    self.ga_weights_path = filepath
+                else:
+                    messagebox.showwarning("File Not Found", f"File not found: {filepath}\nUsing default weights instead.")
+                    self.use_ga_weights = False
+
             # Create Board and AI objects
             self.board = Board(self.size)
-            self.ai_player = HeuristicAIDepth(self.board, player=self.ai_side, depth=self.depth)
+            weights = None
+            if self.use_ga_weights and self.ga_weights_path:
+                with open(self.ga_weights_path, 'r') as f:
+                    weights = json.load(f)
+            self.ai_player = HeuristicAIDepth(self.board, player=self.ai_side, depth=self.depth, weights=weights)
         else:
             # Two-player mode
             self.board = Board(self.size)
             self.ai_side = None
+            self.use_ga_weights = False
         
         self.current_player = 1  # Black goes first
     
@@ -212,7 +235,11 @@ class GomokuGUI:
         """Restart the game"""
         self.board = Board(self.size)
         if self.ai_side:
-            self.ai_player = HeuristicAIDepth(self.board, player=self.ai_side, depth=self.depth)
+            weights = None
+            if self.use_ga_weights and self.ga_weights_path and os.path.exists(self.ga_weights_path):
+                with open(self.ga_weights_path, 'r') as f:
+                    weights = json.load(f)
+            self.ai_player = HeuristicAIDepth(self.board, player=self.ai_side, depth=self.depth, weights=weights)
         self.current_player = 1
         self.game_over = False
         self.draw_board()

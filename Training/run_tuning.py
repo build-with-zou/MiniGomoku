@@ -9,9 +9,9 @@ from Training.genetic import run_ga
 from Training.config import DEFAULT_CHROM
 
 if __name__ == "__main__":
-    best_chrom, fitness = run_ga(pop_size=10, generations=10, num_games=6, depth=2)
+    best_chrom, fitness = run_ga(pop_size=12, generations=10, num_games=6, depth=3)
     print(f"Final best fitness: {fitness:.3f}")
     os.makedirs("training/output", exist_ok=True)
-    with open("training/output/best_chrom.json", "w") as f:
+    with open("training/output/best_chrom_depth_3.json", "w") as f:
         json.dump(best_chrom, f)
     print("Best chromosome saved.")

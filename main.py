@@ -4,6 +4,8 @@ from AI.base import BaseAI
 from AI.Heuristic_ai_depth import HeuristicAIDepth
 from human import Human
 from board import Board
+import json
+import os
 
 def main():
     print("Welcome to Gomoku!")
@@ -56,12 +58,29 @@ def main():
             if ai_choice not in ['1', '2', '3', '4']:
                 print("Invalid choice, defaulting to level 3.")
                 ai_choice = '3'
+            depth = int(ai_choice)
+
+            # Ask if using GA optimized weights
+            use_ga = input("Use GA optimized weights? (y/n): ").lower() == 'y'
+            weights = None
+            if use_ga:
+                default_path = f"Training/output/best_chrom_depth_{depth}.json"
+                filepath = input(f"Enter weights file path (default: {default_path}): ").strip()
+                if not filepath:
+                    filepath = default_path
+                if os.path.exists(filepath):
+                    with open(filepath, 'r') as f:
+                        weights = json.load(f)
+                    print(f"Loaded weights from {filepath}")
+                else:
+                    print(f"File not found: {filepath}, using default weights instead.")
+
             if ai_player == 1:
-                player1 = HeuristicAIDepth(board, ai_player, depth=int(ai_choice))
+                player1 = HeuristicAIDepth(board, ai_player, depth=depth, weights=weights)
                 player2 = Human(board, human_player)
             else:
                 player1 = Human(board, human_player)
-                player2 = HeuristicAIDepth(board, ai_player, depth=int(ai_choice))
+                player2 = HeuristicAIDepth(board, ai_player, depth=depth, weights=weights)
         else:
             player1 = Human(board, 1)
             player2 = Human(board, 2)

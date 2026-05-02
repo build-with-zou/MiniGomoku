@@ -23,6 +23,7 @@ A pure Python implementation of the classic Gomoku (Five in a Row) board game. N
 - ✅ Incremental board evaluation for fast move scoring (only affected lines recomputed)
 - ✅ **Pattern module** – all pattern dictionaries and scoring weights are centralized in `pattern.py` for easy customization and future automatic tuning
 - ✅ **Genetic algorithm successfully trained** – the AI’s evaluation weights have been automatically optimized via a genetic algorithm; the best chromosome is available and can be loaded to instantly improve the AI's playing strength
+- ✅ **Multi‑process parallel training** – fitness evaluations run in parallel across CPU cores via `ProcessPoolExecutor`; a single `workers` parameter controls the level of parallelism, dramatically speeding up the genetic search
 
 ---
 
@@ -76,7 +77,7 @@ python gui.py
 ├── training/
 │   ├── config.py                 # Gene bounds, chromosome length, default weights
 │   ├── arena.py                  # Headless game engine and fitness evaluation
-│   ├── genetic.py                # Genetic operators (selection, crossover, mutation) and GA loop
+│   ├── genetic.py                # Genetic operators (selection, crossover, mutation) and GA loop (supports parallel evaluation)
 │   ├── run_tuning.py             # Entry point to start GA training
 │   └── output/                   # Training results (best_chrom.json, history.csv)
 └── README.md                     # Project documentation
@@ -131,7 +132,7 @@ Centralizes all pattern dictionaries and scoring weights for the heuristic evalu
 The `training/` directory contains a self‑contained pipeline for automatically tuning the AI’s evaluation weights:
 - `config.py` – defines the search space (gene bounds) and default chromosome.
 - `arena.py` – provides a headless game engine (`play_game`) and a fitness function (`compute_fitness`) that evaluates a chromosome by playing against a fixed opponent.
-- `genetic.py` – implements tournament selection, uniform crossover, gaussian mutation, and the main `run_ga` loop. The loop prints real‑time progress (generation, individual, game number) and saves a history log (`history.csv`).
+- `genetic.py` – implements tournament selection, uniform crossover, gaussian mutation, and the main `run_ga` loop. The loop prints real‑time progress (generation, individual, game number) and saves a history log (`history.csv`). **Evaluation runs in parallel across multiple CPU cores** using `ProcessPoolExecutor`; the `workers` parameter controls how many processes are used (defaults to all available cores), enabling dramatic speed‑ups for large populations.
 - `run_tuning.py` – entry point that starts the GA and saves the best chromosome to `training/output/best_chrom.json`.
 
 A successfully trained chromosome is already available in `training/output/`. To use it, load the JSON file and pass it as `weights` when creating the AI.
@@ -230,6 +231,7 @@ Issues and Pull Requests are welcome! Areas where contributions are especially a
 - ✅ 增量棋盘评估：每次只计算落子点相关线条的分数变化，大幅提高搜索速度
 - ✅ **Pattern 模块** – 所有模式字典和评分权重集中管理，便于定制和将来自动调参
 - ✅ **遗传算法已成功训练** – AI 的评估权重已通过遗传算法自动优化；最优染色体已保存，可直接加载使用，立竿见影提升 AI 棋力
+- ✅ **多进程并行训练** – 适应度评估通过 `ProcessPoolExecutor` 在多核 CPU 上并行执行；一个 `workers` 参数即可控制并行度，显著加速遗传搜索
 
 ---
 
@@ -283,7 +285,7 @@ python gui.py
 ├── training/
 │   ├── config.py                 # 基因范围、染色体长度、默认权重
 │   ├── arena.py                  # 无渲染对局引擎与适应度评估
-│   ├── genetic.py                # 遗传算子（选择、交叉、变异）与GA主循环
+│   ├── genetic.py                # 遗传算子（选择、交叉、变异）与GA主循环（支持并行评估）
 │   ├── run_tuning.py             # 启动GA训练的入口脚本
 │   └── output/                   # 训练结果（best_chrom.json, history.csv）
 └── README.md                     # 项目说明文档
@@ -338,7 +340,7 @@ AI 还可接受一个可选的 `weights` 参数（染色体），直接设定其
 `training/` 目录包含自动调优 AI 评估权重的完整管道：
 - `config.py` – 定义搜索空间（基因边界）和默认染色体。
 - `arena.py` – 提供无渲染对局引擎 (`play_game`) 和适应度函数 (`compute_fitness`)，通过让染色体与固定对手对战来评估其优劣。
-- `genetic.py` – 实现锦标赛选择、均匀交叉、高斯变异以及主循环 `run_ga`。循环会实时打印进度（代数、个体编号、比赛局数），并保存历史日志 (`history.csv`)。
+- `genetic.py` – 实现锦标赛选择、均匀交叉、高斯变异以及主循环 `run_ga`。循环会实时打印进度（代数、个体编号、比赛局数），并保存历史日志 (`history.csv`)。**评估过程通过 `ProcessPoolExecutor` 在多个 CPU 核心上并行执行**，通过 `workers` 参数控制并行进程数（默认使用全部核心），可显著缩短大规模种群的训练时间。
 - `run_tuning.py` – 启动 GA 训练并将最优染色体保存为 `training/output/best_chrom.json` 的入口。
 
 训练好的最优染色体已保存在 `training/output/` 目录下。使用时只需加载 JSON 文件，并在创建 AI 时作为 `weights` 参数传入即可。
@@ -362,7 +364,7 @@ AI 还可接受一个可选的 `weights` 参数（染色体），直接设定其
 - [x] 静态搜索提升战术稳定性
 
 ### 📌 第二阶段：更强的搜索与自动调参
-- [x] 走法排序以提升剪枝效率
+- [ ] 走法排序以提升剪枝效率
 - [x] **遗传算法已成功训练** – 基于染色体的权重优化已执行完毕，产出了一组优化的评估参数
 - [ ] 增加更丰富的棋形（跳活三、跳冲四、双重威胁识别等）
 

@@ -14,8 +14,7 @@ class HeuristicAIDepth(BaseAI):
         self.pattern = Pattern(player,weights)
         self.opponent = 2 if player == 1 else 1
         self.depth = depth
-        self.shape_score = self.pattern.pattern_score
-        self.defensive_weight = self.pattern.defensive_weight
+        
 
     # ---------- Main entry ----------
     def get_move(self) -> Optional[Tuple[int, int]]:
@@ -155,8 +154,8 @@ class HeuristicAIDepth(BaseAI):
         total = 0
         for pattern, feature in patterns.items():
             if pattern in line:
-                total += (self.shape_score["potential"].get(feature, 0) +
-                          self.shape_score["sleep"].get(feature, 0))
+                total += (self.pattern.pattern_score["potential"].get(feature, 0) +
+                          self.pattern.pattern_score["sleep"].get(feature, 0))
         return total
 
     def _evaluate_board(self, for_player=None):
@@ -188,7 +187,7 @@ class HeuristicAIDepth(BaseAI):
     # ---------- Incremental move score ----------
     def _score_move_one_step(self, row, col, for_player, weight = None):
         if weight is None:
-            weight = self.defensive_weight
+            weight = self.pattern.defensive_weight
         my_patterns = self.pattern.get_pattern(for_player)
         op_patterns = self.pattern.get_pattern(3 - for_player)
         directions = [(0,1),(1,0),(1,1),(1,-1)]
@@ -252,7 +251,7 @@ class HeuristicAIDepth(BaseAI):
                     break
             return random.choice(best_move), max_eval
         else:
-            candidates = sorted(candidates, key=lambda move: self._score_move_one_step(move[0], move[1], self.opponent, weight=self.defensive_weight), reverse=True)
+            candidates = sorted(candidates, key=lambda move: self._score_move_one_step(move[0], move[1], self.opponent, weight=self.pattern.defensive_weight), reverse=True)
             best_move = []
             min_eval = float('inf')
             opponent = 3 - self.player

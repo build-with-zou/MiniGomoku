@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import csv
 import random
 import copy
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from Training.config import GENE_BOUNDS, CHROM_LENGTH, DEFAULT_CHROM
 from Training.arena import compute_fitness
 
@@ -99,13 +100,26 @@ def run_ga(pop_size=20, generations=30, opponent_chrom=None,
     # 3. Main evolution loop
     for gen in range(generations):
         print(f"===== Generation {gen+1}/{generations} =====")
-        scores = []
-        for idx, chrom in enumerate(population):
-            print(f"Evaluating chromosome {idx+1}/{pop_size}...")
-            fitness = compute_fitness(chrom, opponent_chrom,
-                                      num_games=num_games, depth=depth)
-            scores.append(fitness)
-            print(f"  Fitness = {fitness:.3f}")
+
+        # Parallel fitness evaluation
+        scores = [0.0] * pop_size
+        with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
+            # Submit all tasks
+            future_to_idx = {
+                executor.submit(compute_fitness, population[i], opponent_chrom, num_games, depth): i
+                for i in range(pop_size)
+            }
+            completed = 0
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    scores[idx] = future.result()
+                except Exception as e:
+                    print(f"Error evaluating chromosome {idx}: {e}")
+                    scores[idx] = 0.0
+                completed += 1
+                print(f"  Evaluated {completed}/{pop_size} individuals", end='\r')
+            print()  # newline after all done
 
         # 3.2 Find the best individual in this generation and update the global best
         current_best_idx = max(range(len(scores)), key=lambda i: scores[i])
