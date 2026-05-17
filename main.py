@@ -2,6 +2,7 @@
 # Content: A Gomoku game implementation in Python without any imported libraries.
 from AI.base import BaseAI
 from AI.Heuristic_ai_depth import HeuristicAIDepth
+from AI.MCTS_ai import MCTS_AI
 from human import Human
 from board import Board
 import json
@@ -49,38 +50,69 @@ def main():
             print("Do you want to be Player 1 or Player 2? (Enter 1 or 2):")
             human_player = 1 if int(input()) == 1 else 2
             ai_player = 2 if human_player == 1 else 1
-            print("Choose an AI difficulty level(from 1 to 4):")
-            while True:
-                ai_choice = input("1: Easy, 2: Medium, 3: Hard, 4: Expert (default 3): ") or "3"
-                if ai_choice in ['1', '2', '3', '4']:
-                    break
-                print("Invalid choice, please enter a number between 1 and 4.")
-            if ai_choice not in ['1', '2', '3', '4']:
-                print("Invalid choice, defaulting to level 3.")
-                ai_choice = '3'
-            depth = int(ai_choice)
 
-            # Ask if using GA optimized weights
-            use_ga = input("Use GA optimized weights? (y/n): ").lower() == 'y'
-            weights = None
-            if use_ga:
-                default_path = f"Training/output/best_chrom_depth_{depth}.json"
-                filepath = input(f"Enter weights file path (default: {default_path}): ").strip()
-                if not filepath:
-                    filepath = default_path
-                if os.path.exists(filepath):
-                    with open(filepath, 'r') as f:
-                        weights = json.load(f)
-                    print(f"Loaded weights from {filepath}")
+            
+            print("Choose AI type:")
+            print("  1: HeuristicAI (depth search)")
+            print("  2: MCTS AI (Monte Carlo Tree Search)")
+            ai_type = input("Enter 1 or 2 (default 1): ").strip() or "1"
+            while ai_type not in ['1', '2']:
+                ai_type = input("Invalid choice, enter 1 or 2: ").strip() or "1"
+           
+
+            if ai_type == '1':
+                print("Choose an AI difficulty level(from 1 to 4):")
+                while True:
+                    ai_choice = input("1: Easy, 2: Medium, 3: Hard, 4: Expert (default 3): ") or "3"
+                    if ai_choice in ['1', '2', '3', '4']:
+                        break
+                    print("Invalid choice, please enter a number between 1 and 4.")
+                if ai_choice not in ['1', '2', '3', '4']:
+                    print("Invalid choice, defaulting to level 3.")
+                    ai_choice = '3'
+                depth = int(ai_choice)
+
+                # Ask if using GA optimized weights
+                use_ga = input("Use GA optimized weights? (y/n): ").lower() == 'y'
+                weights = None
+                if use_ga:
+                    default_path = f"Training/output/best_chrom_depth_{depth}.json"
+                    filepath = input(f"Enter weights file path (default: {default_path}): ").strip()
+                    if not filepath:
+                        filepath = default_path
+                    if os.path.exists(filepath):
+                        with open(filepath, 'r') as f:
+                            weights = json.load(f)
+                        print(f"Loaded weights from {filepath}")
+                    else:
+                        print(f"File not found: {filepath}, using default weights instead.")
+
+                if ai_player == 1:
+                    player1 = HeuristicAIDepth(board, ai_player, depth=depth, weights=weights)
+                    player2 = Human(board, human_player)
                 else:
-                    print(f"File not found: {filepath}, using default weights instead.")
+                    player1 = Human(board, human_player)
+                    player2 = HeuristicAIDepth(board, ai_player, depth=depth, weights=weights)
 
-            if ai_player == 1:
-                player1 = HeuristicAIDepth(board, ai_player, depth=depth, weights=weights)
-                player2 = Human(board, human_player)
-            else:
-                player1 = Human(board, human_player)
-                player2 = HeuristicAIDepth(board, ai_player, depth=depth, weights=weights)
+            else:  
+                print("Enter MCTS simulation times per move (default 1000):")
+                sim_input = input().strip()
+                if sim_input == "":
+                    times = 1000
+                else:
+                    try:
+                        times = int(sim_input)
+                    except ValueError:
+                        print("Invalid input, using default 1000.")
+                        times = 1000
+
+                if ai_player == 1:
+                    player1 = MCTS_AI(board, player=ai_player, times=times)
+                    player2 = Human(board, human_player)
+                else:
+                    player1 = Human(board, human_player)
+                    player2 = MCTS_AI(board, player=ai_player, times=times)
+
         else:
             player1 = Human(board, 1)
             player2 = Human(board, 2)

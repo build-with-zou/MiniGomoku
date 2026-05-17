@@ -70,3 +70,13 @@ class Board:
         print("  " + " ".join(f"{i+1:2}" for i in range(self.size)))  # Print column numbers
         for i, row in enumerate(self.board):
             print(f"{i+1:2} " + '  '.join(str(cell) for cell in row))
+
+    def clone(self):
+        """
+        Create a deep copy of the board, which can be used for simulating moves in the MCTS algorithm without affecting the actual game state.
+        Return: A new Board object with the same state as the current board.
+        """
+        new_board = Board(self.size)
+        new_board.board = [row[:] for row in self.board]  # Deep copy of the board
+        return new_board
+

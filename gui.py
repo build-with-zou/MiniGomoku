@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import messagebox, simpledialog
 from board import Board
 from AI.Heuristic_ai_depth import HeuristicAIDepth
+from AI.MCTS_ai import MCTS_AI
 import json
 import os
 
@@ -21,12 +22,14 @@ class GomokuGUI:
         self.ai_player = None   # AI object
         self.human_player = 1   # Human player number
         self.ai_side = None     # AI side
-        self.depth = 2          # AI search depth
+        self.depth = 2          # AI search depth (for heuristic AI)
+        self.ai_type = None     # 'heuristic' or 'mcts'
+        self.mcts_times = 1000  # Simulation times for MCTS
         self.board = None       # Board instance
         self.current_player = 1
         self.game_over = False
 
-        # GA weights settings
+        # GA weights settings (only for heuristic AI)
         self.use_ga_weights = False
         self.ga_weights_path = None
         
@@ -67,36 +70,53 @@ class GomokuGUI:
                 return
             self.human_player = side
             self.ai_side = 2 if side == 1 else 1
-            
-            # Choose AI difficulty
-            depth = simpledialog.askinteger("AI Difficulty", "Enter search depth (1-4):", minvalue=1, maxvalue=4, initialvalue=2)
-            if depth is None:
+
+            # ---- Choose AI type ----
+            ai_type_choice = simpledialog.askinteger("AI Type", "Select AI type:\n1: Heuristic (depth search)\n2: MCTS (Monte Carlo Tree Search)", minvalue=1, maxvalue=2)
+            if ai_type_choice is None:
                 return
-            self.depth = depth
+            if ai_type_choice == 1:
+                self.ai_type = 'heuristic'
+                # Choose AI difficulty (depth)
+                depth = simpledialog.askinteger("AI Difficulty", "Enter search depth (1-4):", minvalue=1, maxvalue=4, initialvalue=2)
+                if depth is None:
+                    return
+                self.depth = depth
 
-            # Ask for GA weights
-            use_ga = messagebox.askyesno("Optimized Weights", "Use GA optimized weights?")
-            self.use_ga_weights = use_ga
-            if use_ga:
-                default_path = f"Training/output/best_chrom_depth_{self.depth}.json"
-                filepath = simpledialog.askstring("Weights File", f"Enter weights file path (default: {default_path}):", initialvalue=default_path)
-                if filepath and os.path.exists(filepath):
-                    self.ga_weights_path = filepath
-                else:
-                    messagebox.showwarning("File Not Found", f"File not found: {filepath}\nUsing default weights instead.")
-                    self.use_ga_weights = False
+                # Ask for GA weights
+                use_ga = messagebox.askyesno("Optimized Weights", "Use GA optimized weights?")
+                self.use_ga_weights = use_ga
+                if use_ga:
+                    default_path = f"Training/output/best_chrom_depth_{self.depth}.json"
+                    filepath = simpledialog.askstring("Weights File", f"Enter weights file path (default: {default_path}):", initialvalue=default_path)
+                    if filepath and os.path.exists(filepath):
+                        self.ga_weights_path = filepath
+                    else:
+                        messagebox.showwarning("File Not Found", f"File not found: {filepath}\nUsing default weights instead.")
+                        self.use_ga_weights = False
 
-            # Create Board and AI objects
-            self.board = Board(self.size)
-            weights = None
-            if self.use_ga_weights and self.ga_weights_path:
-                with open(self.ga_weights_path, 'r') as f:
-                    weights = json.load(f)
-            self.ai_player = HeuristicAIDepth(self.board, player=self.ai_side, depth=self.depth, weights=weights)
+                # Create Board and AI objects
+                self.board = Board(self.size)
+                weights = None
+                if self.use_ga_weights and self.ga_weights_path:
+                    with open(self.ga_weights_path, 'r') as f:
+                        weights = json.load(f)
+                self.ai_player = HeuristicAIDepth(self.board, player=self.ai_side, depth=self.depth, weights=weights)
+
+            else:  # MCTS
+                self.ai_type = 'mcts'
+                times = simpledialog.askinteger("MCTS Simulations", "Enter simulation times per move (default 1000):", minvalue=1, maxvalue=100000, initialvalue=1000)
+                if times is None:
+                    return
+                self.mcts_times = times
+                self.board = Board(self.size)
+                self.ai_player = MCTS_AI(self.board, player=self.ai_side, times=self.mcts_times)
+
         else:
             # Two-player mode
             self.board = Board(self.size)
             self.ai_side = None
+            self.ai_type = None
             self.use_ga_weights = False
         
         self.current_player = 1  # Black goes first
@@ -235,11 +255,14 @@ class GomokuGUI:
         """Restart the game"""
         self.board = Board(self.size)
         if self.ai_side:
-            weights = None
-            if self.use_ga_weights and self.ga_weights_path and os.path.exists(self.ga_weights_path):
-                with open(self.ga_weights_path, 'r') as f:
-                    weights = json.load(f)
-            self.ai_player = HeuristicAIDepth(self.board, player=self.ai_side, depth=self.depth, weights=weights)
+            if self.ai_type == 'heuristic':
+                weights = None
+                if self.use_ga_weights and self.ga_weights_path and os.path.exists(self.ga_weights_path):
+                    with open(self.ga_weights_path, 'r') as f:
+                        weights = json.load(f)
+                self.ai_player = HeuristicAIDepth(self.board, player=self.ai_side, depth=self.depth, weights=weights)
+            elif self.ai_type == 'mcts':
+                self.ai_player = MCTS_AI(self.board, player=self.ai_side, times=self.mcts_times)
         self.current_player = 1
         self.game_over = False
         self.draw_board()

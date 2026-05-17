@@ -13,10 +13,11 @@ A pure Python implementation of the classic Gomoku (Five in a Row) board game. N
 - ✅ Fast win detection based on the last move only (O(1) complexity)
 - ✅ Robust input validation and error messages
 - ✅ Draw detection (when the board is full)
-- ✅ **Multiple AI difficulties**:
+- ✅ **Multiple AI strategies**:
   - `HeuristicAI` – greedy one‑step pattern scoring (fast)
   - `HeuristicAIDepth` – configurable depth minimax search with **alpha‑beta pruning**, incremental evaluation, and quiescence search (depth 1–4)
-  - **Smart threat detection** – AI distinguishes between its own offensive threats (rush‑four, live‑four, double‑three) and opponent threats, responding aggressively to win while avoiding over‑defending minor opponent setups
+  - `MCTS_AI` – Monte Carlo Tree Search with **random rollout** and **forced threat detection** (live‑four, rush‑four, double‑three), offering a probabilistic alternative to minimax
+  - **Smart threat detection** – all AIs distinguish between their own offensive threats and opponent threats, responding aggressively to win while avoiding over‑defending minor setups
 - ✅ **Graphical User Interface (GUI)** using built‑in `tkinter` – click to play, with status bar and restart
 - ✅ **Human vs AI**, **Human vs Human**, and **AI vs AI** (test mode) in command line, plus GUI versions of all modes
 - ✅ **Unified player interface**: human and AI players are treated identically, making it easy to add new AI opponents
@@ -45,11 +46,11 @@ python gui.py
 
 **In command line:**
 - **Two‑Player Mode**: two human players take turns.
-- **Human vs AI Mode**: play against the AI, choose your side, and select the AI difficulty.
-- **AI vs AI (Test)**: enter `test` when asked for game mode, then set depths for both AIs.
+- **Human vs AI Mode**: play against the AI, choose your side, and select the AI type and difficulty.
+- **AI vs AI (Test)**: enter `test` when asked for game mode, then set parameters for both AIs.
 
 **In GUI:**
-- A dialog asks for board size, whether to play against AI, your side, and AI difficulty.  
+- A dialog asks for board size, whether to play against AI, your side, AI type, and AI difficulty.  
 - Click on the board to place your piece; the AI responds automatically.
 
 ### Rules
@@ -73,6 +74,8 @@ python gui.py
 │   ├── Heuristic_ai.py           # Greedy one‑step heuristic AI
 │   ├── Heuristic_ai_depth2.py    # (Legacy) 2‑ply minimax AI (kept for reference)
 │   ├── Heuristic_ai_depth.py     # Configurable‑depth minimax AI with alpha‑beta pruning
+│   ├── MCTS_ai.py                # MCTS AI with forced threat detection
+│   ├── MCTS_node.py              # MCTS tree node class
 │   └── pattern.py                # Pattern definitions and scoring weights (supports GA chromosomes)
 ├── training/
 │   ├── config.py                 # Gene bounds, chromosome length, default weights
@@ -123,6 +126,16 @@ The AI can also accept an optional `weights` parameter (a chromosome) that direc
 **The weights have been optimized via genetic algorithm** — a trained chromosome is available and can be loaded to immediately boost the AI's performance.  
 Set `depth=1` for greedy strength, `depth=2` for basic tactics, `depth=3‑4` for stronger play (requires more CPU time at depth 4).
 
+### `MCTS_AI(BaseAI)`
+
+**A Monte Carlo Tree Search AI.**  
+This AI uses the classic MCTS algorithm with **random rollout** as the default simulation strategy. It builds an asymmetric search tree and selects the move with the highest visit count after a given number of simulations (`times` parameter).  
+To compensate for the short‑sightedness of pure random playouts, the AI integrates **forced threat detection** at the root node:  
+- It checks for its own immediate winning move and plays it instantly.  
+- It scans for opponent threats that must be blocked (direct win, live‑four, double‑three) and blocks them as a priority.  
+This makes the MCTS AI tactically reliable while retaining the flexibility of a probabilistic search.  
+The simulation count can be adjusted (e.g., `times=1000` for a balance of speed and strength). Higher values yield stronger play at the cost of longer thinking time. Candidate moves are pruned to cells near existing stones to reduce the branching factor.
+
 ### `Pattern`
 
 Centralizes all pattern dictionaries and scoring weights for the heuristic evaluation. It now supports receiving a chromosome (list of 10 values) via `set_weights()` or the constructor, which instantly reconfigures the evaluation function. This makes it the bridge between the AI and the genetic algorithm optimizer.
@@ -161,8 +174,9 @@ Implements the same interface as AI players, obtaining moves from console input.
 - [ ] Add more sophisticated patterns (jump‑three, jump‑four, double‑threat recognition)
 
 ### 📌 Phase 3: Deep Reinforcement Learning (AlphaZero Style)
+- [x] **Basic MCTS implemented** – Monte Carlo Tree Search with random rollout and forced threat detection
 - [ ] Build a residual neural network (policy + value heads) using PyTorch
-- [ ] Implement Monte Carlo Tree Search (MCTS)
+- [ ] Integrate neural network into MCTS for guided search
 - [ ] Multi‑channel board state encoding
 
 ### 📌 Phase 4: Self‑Play and Data Generation
@@ -187,6 +201,7 @@ Implements the same interface as AI players, obtaining moves from console input.
    *Plan: increase quiescence depth dynamically or implement a specialised capture search.*
 4. **No opening book** – The AI relies entirely on search from the first move.  
    *Plan: add a small opening book or use self‑play data to learn openings.*
+5. **MCTS simulation performance** – The MCTS AI currently uses random rollouts, which require many simulations to achieve decent play. This can be improved by replacing random rollouts with a neural network evaluator or heuristic‑guided rollouts. The simulation count and candidate move pruning parameters can be tuned for a balance of speed and strength.
 
 ---
 
@@ -221,10 +236,11 @@ Issues and Pull Requests are welcome! Areas where contributions are especially a
 - ✅ 基于最后落子位置的快速赢棋检测（O(1) 复杂度）
 - ✅ 完善的输入校验与错误提示
 - ✅ 平局检测（棋盘下满）
-- ✅ **多种 AI 难度**：
+- ✅ **多种 AI 策略**：
   - `HeuristicAI` – 贪心一步评分（快速）
   - `HeuristicAIDepth` – 可调深度的极小极大搜索，带 **Alpha‑Beta 剪枝**、增量评估和静态搜索（深度 1‑4）
-  - **智能威胁检测** – AI 能区分自己的进攻威胁（冲四、活四、双活三）与对手的威胁，积极争胜的同时避免对次要对手棋型过度防守
+  - `MCTS_AI` – 蒙特卡洛树搜索，结合**随机模拟**与**强制威胁检测**（活四、冲四、双活三），提供了一种概率化的搜索选择
+  - **智能威胁检测** – 所有 AI 都能区分自己的进攻威胁与对手的威胁，积极争胜的同时避免对次要对手棋型过度防守
 - ✅ **图形用户界面（GUI）**（基于内置 `tkinter`）– 点击落子，状态栏提示，支持重新开始
 - ✅ 支持 **人机对战**、**人人对战** 以及 **AI 对 AI 测试**（命令行），GUI 也包含前两种模式
 - ✅ **统一的玩家接口**：人类与 AI 被同等对待，易于增加新的 AI 对手
@@ -253,11 +269,11 @@ python gui.py
 
 **命令行下：**
 - **双人对战**：两名人类玩家轮流落子。
-- **人机对战**：选择与 AI 对战，指定自己执先手或后手，并选择 AI 难度。
-- **AI 测试**：在问及游戏模式时输入 `test`，即可设置两名 AI 的搜索深度，观看 AI 对战。
+- **人机对战**：选择与 AI 对战，指定自己执先手或后手，并选择 AI 类型和难度。
+- **AI 测试**：在问及游戏模式时输入 `test`，即可设置两名 AI 的参数，观看 AI 对战。
 
 **GUI 下：**
-- 启动后会弹出对话框，依次设置棋盘大小、是否人机对战、你的棋子颜色、AI 搜索深度。  
+- 启动后会弹出对话框，依次设置棋盘大小、是否人机对战、你的棋子颜色、AI 类型、AI 难度。  
 - 点击棋盘交叉点落子，AI 会自动回应。
 
 ### 游戏规则
@@ -281,6 +297,8 @@ python gui.py
 │   ├── Heuristic_ai.py           # 贪心一步启发式 AI
 │   ├── Heuristic_ai_depth2.py    # （旧版）2层极小极大 AI（保留作为参考）
 │   ├── Heuristic_ai_depth.py     # 可调深度的极小极大 AI（带 Alpha‑Beta 剪枝）
+│   ├── MCTS_ai.py                # 带强制防守检测的 MCTS AI
+│   ├── MCTS_node.py              # MCTS 树节点类
 │   └── pattern.py                # 模式定义与评分权重（支持染色体参数）
 ├── training/
 │   ├── config.py                 # 基因范围、染色体长度、默认权重
@@ -331,6 +349,16 @@ AI 还可接受一个可选的 `weights` 参数（染色体），直接设定其
 **权重已通过遗传算法优化** — 训练好的染色体文件可直接加载，立竿见影提升 AI 表现。  
 设置 `depth=1` 可获得贪心强度，`depth=2` 获得基础战术，`depth=3‑4` 则更强（深度 4 时计算时间稍长）。
 
+### `MCTS_AI(BaseAI)`
+
+**基于蒙特卡洛树搜索的 AI。**  
+该 AI 使用经典的 MCTS 算法，默认采用**随机模拟（rollout）**作为评估策略。它构建一棵非对称搜索树，在指定模拟次数（`times` 参数）后选择访问次数最多的走法。  
+为弥补纯随机模拟缺乏紧迫感的缺陷，AI 在搜索根部集成了**强制威胁检测**：  
+- 主动检测自己能否一步获胜，并立即执行。  
+- 扫描对手的必杀威胁（直接连五、活四、双活三），并以最高优先级进行封堵。  
+这使得 MCTS AI 在战术上变得可靠，同时保留了概率化搜索的灵活性。  
+模拟次数可调节（如 `times=1000` 以平衡速度与强度）。更高的值会带来更强的棋力，但思考时间也会相应增加。候选走法被剪枝至已有棋子周围的空位，以降低搜索分支因子。
+
 ### `Pattern`
 
 集中管理启发式评估所需的所有模式字典和评分权重。现在支持通过 `set_weights()` 或构造函数接收染色体（10个值的列表），即时重新配置评估函数，成为 AI 与遗传算法优化器之间的桥梁。
@@ -364,13 +392,14 @@ AI 还可接受一个可选的 `weights` 参数（染色体），直接设定其
 - [x] 静态搜索提升战术稳定性
 
 ### 📌 第二阶段：更强的搜索与自动调参
-- [ ] 走法排序以提升剪枝效率
+- [x] 走法排序以提升剪枝效率
 - [x] **遗传算法已成功训练** – 基于染色体的权重优化已执行完毕，产出了一组优化的评估参数
-- [ ] 增加更丰富的棋形（跳活三、跳冲四、双重威胁识别等）
+- [x] 增加更丰富的棋形（跳活三、跳冲四、双重威胁识别等）
 
 ### 📌 第三阶段：深度强化学习（AlphaZero 风格）
+- [x] **基础 MCTS 已实现** – 带随机模拟和强制威胁检测的蒙特卡洛树搜索
 - [ ] 使用 PyTorch 构建残差神经网络（策略+价值双输出）
-- [ ] 实现蒙特卡洛树搜索（MCTS）
+- [ ] 将神经网络集成到 MCTS 中进行指导搜索
 - [ ] 完成棋盘状态的多通道编码
 
 ### 📌 第四阶段：自我对弈与数据生成
@@ -395,6 +424,7 @@ AI 还可接受一个可选的 `weights` 参数（染色体），直接设定其
    *改进：动态调整静态搜索深度或引入专门捕获搜索。*
 4. **无开局知识** – AI 开局完全依赖搜索，缺乏定式。  
    *改进：可添加小型开局库，或通过自对弈数据学习开局。*
+5. **MCTS 模拟效率** – MCTS AI 目前采用纯随机模拟，需要大量模拟次数才能达到可接受的棋力。未来可通过神经网络评估或启发式引导模拟来改进。模拟次数与候选点剪枝参数可根据速度与强度的平衡进行调优。
 
 ---
 
