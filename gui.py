@@ -7,6 +7,7 @@ from tkinter import messagebox, simpledialog
 from board import Board
 from AI.Heuristic_ai_depth import HeuristicAIDepth
 from AI.MCTS_ai import MCTS_AI
+from Training.config import OUTPUT_DIR
 import json
 import os
 
@@ -49,6 +50,27 @@ class GomokuGUI:
             self.window.after(300, self.ai_move)
         
         self.window.mainloop()
+
+    def _load_weights(self, depth):
+        if not self.use_ga_weights:
+            return None
+        default_path = OUTPUT_DIR / f"best_chrom_depth_{depth}.json"
+        path = self.ga_weights_path or default_path
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                return json.load(f)
+        messagebox.showwarning("File Not Found", f"File not found: {path}\nUsing default weights instead.")
+        return None
+
+    def _build_ai(self):
+        if self.ai_side is None:
+            return None
+        if self.ai_type == 'heuristic':
+            weights = self._load_weights(self.depth)
+            return HeuristicAIDepth(self.board, player=self.ai_side, depth=self.depth, weights=weights)
+        if self.ai_type == 'mcts':
+            return MCTS_AI(self.board, player=self.ai_side, times=self.mcts_times)
+        return None
     
     def setup_game(self):
         """Set up the game by asking user preferences"""
@@ -59,6 +81,8 @@ class GomokuGUI:
         try:
             self.size = int(size_str)
         except ValueError:
+            self.size = 15
+        if not (5 <= self.size <= 25):
             self.size = 15
         
         # Whether to play against AI
@@ -87,21 +111,18 @@ class GomokuGUI:
                 use_ga = messagebox.askyesno("Optimized Weights", "Use GA optimized weights?")
                 self.use_ga_weights = use_ga
                 if use_ga:
-                    default_path = f"Training/output/best_chrom_depth_{self.depth}.json"
+                    default_path = str(OUTPUT_DIR / f"best_chrom_depth_{self.depth}.json")
                     filepath = simpledialog.askstring("Weights File", f"Enter weights file path (default: {default_path}):", initialvalue=default_path)
-                    if filepath and os.path.exists(filepath):
+                    if filepath:
                         self.ga_weights_path = filepath
                     else:
-                        messagebox.showwarning("File Not Found", f"File not found: {filepath}\nUsing default weights instead.")
-                        self.use_ga_weights = False
+                        self.ga_weights_path = default_path
+                else:
+                    self.ga_weights_path = None
 
                 # Create Board and AI objects
                 self.board = Board(self.size)
-                weights = None
-                if self.use_ga_weights and self.ga_weights_path:
-                    with open(self.ga_weights_path, 'r') as f:
-                        weights = json.load(f)
-                self.ai_player = HeuristicAIDepth(self.board, player=self.ai_side, depth=self.depth, weights=weights)
+                self.ai_player = self._build_ai()
 
             else:  # MCTS
                 self.ai_type = 'mcts'
@@ -110,7 +131,7 @@ class GomokuGUI:
                     return
                 self.mcts_times = times
                 self.board = Board(self.size)
-                self.ai_player = MCTS_AI(self.board, player=self.ai_side, times=self.mcts_times)
+                self.ai_player = self._build_ai()
 
         else:
             # Two-player mode
@@ -118,6 +139,7 @@ class GomokuGUI:
             self.ai_side = None
             self.ai_type = None
             self.use_ga_weights = False
+            self.ai_player = None
         
         self.current_player = 1  # Black goes first
     
@@ -199,7 +221,7 @@ class GomokuGUI:
         col = round((event.x - self.cell_size) / self.cell_size)
         row = round((event.y - self.cell_size) / self.cell_size)
         if 0 <= row < self.size and 0 <= col < self.size:
-            if self.board.place(self.current_player, [row, col]):
+            if self.board.apply_move(self.current_player, (row, col)):
                 self.draw_piece(row, col, self.current_player)
                 if self.check_game_over(row, col):
                     return
@@ -215,7 +237,7 @@ class GomokuGUI:
         move = self.ai_player.get_move()
         if move is not None:
             r, c = move
-            success = self.board.place(self.current_player, [r, c])
+            success = self.board.apply_move(self.current_player, (r, c))
             if success:
                 self.draw_piece(r, c, self.current_player)
                 if not self.check_game_over(r, c):
@@ -223,7 +245,7 @@ class GomokuGUI:
     
     def check_game_over(self, row, col):
         """Check if the game is over after the last move"""
-        if self.board.check_win(self.current_player, [row, col]):
+        if self.board.check_win(self.current_player, (row, col)):
             self.game_over = True
             winner = "Black (Player 1)" if self.current_player == 1 else "White (Player 2)"
             messagebox.showinfo("Game Over", f"{winner} wins!")
@@ -254,15 +276,7 @@ class GomokuGUI:
     def restart(self):
         """Restart the game"""
         self.board = Board(self.size)
-        if self.ai_side:
-            if self.ai_type == 'heuristic':
-                weights = None
-                if self.use_ga_weights and self.ga_weights_path and os.path.exists(self.ga_weights_path):
-                    with open(self.ga_weights_path, 'r') as f:
-                        weights = json.load(f)
-                self.ai_player = HeuristicAIDepth(self.board, player=self.ai_side, depth=self.depth, weights=weights)
-            elif self.ai_type == 'mcts':
-                self.ai_player = MCTS_AI(self.board, player=self.ai_side, times=self.mcts_times)
+        self.ai_player = self._build_ai()
         self.current_player = 1
         self.game_over = False
         self.draw_board()

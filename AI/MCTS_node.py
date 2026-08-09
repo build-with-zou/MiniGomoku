@@ -1,15 +1,30 @@
 # File name: MCTS_node.py
-# Content: MCTS node for later use in MCTS AI
+# Content: MCTS node for Gomoku search.
+
 
 class MCTSNode:
-    def __init__(self, parent=None, pos=None, player=None):
+    def __init__(
+        self,
+        parent=None,
+        pos=None,
+        player=None,
+        player_to_move=None,
+        state_key=None,
+        prior=0.0,
+    ):
         self.parent = parent
-        self.children = {}          # 键：落子位置 (row, col)，值：MCTSNode
-        self.value = 0.0            # 累计价值（赢=1，输=-1，平=0）
-        self.visits = 0             # 访问次数
-        self.untried_moves = []     # 尚未扩展的合法走法列表，元素为 (row, col)
-        self.pos = pos              # 导致该节点的走法坐标
-        self.player = player        # 走该步棋的玩家（1 或 2）
+        self.children = {}
+        self.value = 0.0
+        self.visits = 0
+        self.untried_moves = []
+        self.action = pos
+        self.pos = pos
+        self.player = player
+        self.player_to_move = player_to_move if player_to_move is not None else (3 - player if player in (1, 2) else None)
+        self.state_key = state_key
+        self.prior = prior
+        self.depth = 0 if parent is None else parent.depth + 1
 
     def is_fully_expanded(self):
         return len(self.untried_moves) == 0
+

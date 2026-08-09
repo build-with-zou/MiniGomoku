@@ -1,31 +1,41 @@
 # file name : genetic.py
-# content : Genetic algorithm for optimizing Gomoku AI parameters, including fitness evaluation and selection of best chromosomes
+# content : Genetic algorithm for optimizing Gomoku AI parameters.
 
-import sys
-from pathlib import Path
+import copy
+import csv
+import json
 import os
+import random
+import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
+
 # add parent directory to sys.path to allow imports from AI and Training modules
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import csv
-import random
-import copy
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from Training.config import GENE_BOUNDS, CHROM_LENGTH, DEFAULT_CHROM
+from AI.pattern import validate_chromosome
 from Training.arena import compute_fitness
+from Training.config import (
+    BOARD_SIZE,
+    DEFAULT_CHROM,
+    DEFAULT_SEED,
+    GENE_BOUNDS,
+    OUTPUT_DIR,
+)
 
-history = []  # To store the history of generations for analysis
-os.makedirs("training/output", exist_ok=True)  # Ensure output directory exists
+history = []  # Kept for backward compatibility; refreshed on every run.
+
 
 def random_chromosome():
-    """Generate a random chromosome within the specified gene bounds"""
+    """Generate a random chromosome within the specified gene bounds."""
     chrom = []
     for low, high in GENE_BOUNDS:
         if isinstance(low, int) and isinstance(high, int):
             chrom.append(random.randint(low, high))
         else:
-            chrom.append(round(random.uniform(low, high), 3))
-    return chrom
+            chrom.append(round(random.uniform(low, high), 6))
+    return validate_chromosome(chrom)
+
 
 def tournament_select(population, scores, k=3):
     best_idx = None
@@ -35,11 +45,9 @@ def tournament_select(population, scores, k=3):
             best_idx = idx
     return copy.deepcopy(population[best_idx])
 
+
 def uniform_crossover(p1, p2):
-    """
-    Perform uniform crossover between two parent chromosomes.
-    Each gene has a 50% chance of being swapped between the parents.
-    """
+    """Perform uniform crossover between two parent chromosomes."""
     c1 = copy.deepcopy(p1)
     c2 = copy.deepcopy(p2)
     for i in range(len(c1)):
@@ -47,66 +55,76 @@ def uniform_crossover(p1, p2):
             c1[i], c2[i] = c2[i], c1[i]
     return c1, c2
 
+
 def mutate(chromosome, mutation_rate=0.1, scale=0.1):
-    """
-    mutation_rate: probability of mutating each gene,usually a small value like 0.1 or 0.05
-    scale: controls the magnitude of mutation, as a fraction of the gene's range
-    """
+    """Mutate a chromosome while keeping every gene within bounds."""
     new_chrom = copy.deepcopy(chromosome)
-    for i in range(len(new_chrom)):
+    for i, (low, high) in enumerate(GENE_BOUNDS):
         if random.random() < mutation_rate:
-            low, high = GENE_BOUNDS[i]
             delta = (high - low) * scale * random.gauss(0, 1)
-            new_val = new_chrom[i] + delta 
-            new_val = max(low, min(high, new_val)) # Ensure the mutated gene stays within bounds
-            # 保持整数/浮点格式
+            new_val = max(low, min(high, new_chrom[i] + delta))
             if isinstance(low, int) and isinstance(high, int):
                 new_chrom[i] = int(round(new_val))
             else:
-                new_chrom[i] = round(new_val, 3)
-    return new_chrom
+                new_chrom[i] = round(new_val, 6)
+    return validate_chromosome(new_chrom)
 
-# ----- The main loop -----
-def run_ga(pop_size=20, generations=30, opponent_chrom=None,
-           elite_ratio=0.1, mutation_rate=0.1, mutation_scale=0.1,
-           num_games=6, depth=2):
+
+def run_ga(
+    pop_size=20,
+    generations=30,
+    opponent_chrom=None,
+    elite_ratio=0.1,
+    mutation_rate=0.1,
+    mutation_scale=0.1,
+    num_games=6,
+    depth=2,
+    seed=DEFAULT_SEED,
+    output_dir=OUTPUT_DIR,
+    artifact_prefix="ga_run",
+    board_size=BOARD_SIZE,
+    verbose=True,
+):
     """
-    The main loop:
-
-    Parameters:
-        pop_size: Population size, default is 20
-        generations: Number of generations, default is 30
-        opponent_chrom: Fixed opponent chromosome, if None, DEFAULT_CHROM is used
-        elite_ratio: Elite retention ratio
-        mutation_rate: Probability of mutating each gene
-        mutation_scale: Mutation magnitude factor (as a fraction of the gene's range)
-        num_games: Number of games played to compute fitness (start small, then increase)
-        depth: Search depth (AI depth used for evaluation, shallow depth recommended for speed)
-
-    Returns:
-        (best_chromosome, best_fitness)
+    Run the genetic algorithm and save the run artifacts.
+    Returns (best_chromosome, best_fitness).
     """
-    # 1. Ensure opponent chromosome is set
+    global history
+    history = []
+
+    if seed is not None:
+        random.seed(seed)
+
     if opponent_chrom is None:
         opponent_chrom = DEFAULT_CHROM[:]
-    
-    # 2. Initialize population with random chromosomes
+    opponent_chrom = validate_chromosome(opponent_chrom)
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     population = [random_chromosome() for _ in range(pop_size)]
-    # Seed with default chromosome is optional; currently commented out
+    best_chrom = population[0][:]
+    best_fitness = float("-inf")
 
-    best_chrom = None
-    best_fitness = 0.0
-
-    # 3. Main evolution loop
     for gen in range(generations):
-        print(f"===== Generation {gen+1}/{generations} =====")
+        if verbose:
+            print(f"===== Generation {gen + 1}/{generations} =====")
 
-        # Parallel fitness evaluation
         scores = [0.0] * pop_size
-        with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
-            # Submit all tasks
+        worker_count = max(1, min(os.cpu_count() or 1, pop_size))
+        with ProcessPoolExecutor(max_workers=worker_count) as executor:
             future_to_idx = {
-                executor.submit(compute_fitness, population[i], opponent_chrom, num_games, depth): i
+                executor.submit(
+                    compute_fitness,
+                    population[i],
+                    opponent_chrom,
+                    num_games,
+                    depth,
+                    None if seed is None else seed + gen * 10_000 + i,
+                    board_size,
+                    False,
+                    False,
+                ): i
                 for i in range(pop_size)
             }
             completed = 0
@@ -114,52 +132,104 @@ def run_ga(pop_size=20, generations=30, opponent_chrom=None,
                 idx = future_to_idx[future]
                 try:
                     scores[idx] = future.result()
-                except Exception as e:
-                    print(f"Error evaluating chromosome {idx}: {e}")
+                except Exception as exc:
+                    if verbose:
+                        print(f"Error evaluating chromosome {idx}: {exc}")
                     scores[idx] = 0.0
                 completed += 1
-                print(f"  Evaluated {completed}/{pop_size} individuals", end='\r')
-            print()  # newline after all done
+                if verbose:
+                    print(f"  Evaluated {completed}/{pop_size} individuals", end="\r")
+            if verbose:
+                print()
 
-        # 3.2 Find the best individual in this generation and update the global best
         current_best_idx = max(range(len(scores)), key=lambda i: scores[i])
-        print(f"Gen {gen}: best fitness = {scores[current_best_idx]:.3f}, chromosome = {population[current_best_idx]}")
-        if scores[current_best_idx] > best_fitness:
-            best_fitness = scores[current_best_idx]
-            best_chrom = population[current_best_idx][:]
-            print(f"  --> New global best: {best_fitness:.3f}")
+        current_best_score = scores[current_best_idx]
+        current_best_chrom = population[current_best_idx][:]
 
-        # 3.3 Elite selection: keep the top elite_ratio% of the population
+        if verbose:
+            print(
+                f"Gen {gen + 1}: best fitness = {current_best_score:.3f}, "
+                f"chromosome = {current_best_chrom}"
+            )
+
+        if current_best_score > best_fitness:
+            best_fitness = current_best_score
+            best_chrom = current_best_chrom[:]
+            if verbose:
+                print(f"  --> New global best: {best_fitness:.3f}")
+
         sorted_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
         elite_count = max(1, int(pop_size * elite_ratio))
         elites = [population[i][:] for i in sorted_indices[:elite_count]]
 
-        # 3.4 Generate new population through selection, crossover, and mutation
-        new_pop = elites[:]  # First, add the elites to the new population
+        new_pop = elites[:]
         while len(new_pop) < pop_size:
-            # Select two parents using tournament selection
             p1 = tournament_select(population, scores, k=3)
             p2 = tournament_select(population, scores, k=3)
-            # Perform uniform crossover to generate two children
             c1, c2 = uniform_crossover(p1, p2)
-            # Mutate the children
             c1 = mutate(c1, mutation_rate, mutation_scale)
             c2 = mutate(c2, mutation_rate, mutation_scale)
-            # Add the children to the new population
             new_pop.append(c1)
             if len(new_pop) < pop_size:
                 new_pop.append(c2)
 
-        # Replace the old population with the new one
         population = new_pop
 
-        # Print statistics
-        avg_fitness = sum(scores) / len(scores)
-        history.append([gen, max(scores), min(scores), avg_fitness])
-        print(f"Gen {gen}: max={max(scores):.3f}, min={min(scores):.3f}, avg={avg_fitness:.3f}\n")
-        
-    with open("training/output/history.csv", "w", newline="") as f:
+        avg_fitness = sum(scores) / len(scores) if scores else 0.0
+        history.append(
+            {
+                "gen": gen + 1,
+                "max": max(scores) if scores else 0.0,
+                "min": min(scores) if scores else 0.0,
+                "avg": avg_fitness,
+                "best_idx": current_best_idx,
+                "best_score": current_best_score,
+            }
+        )
+        if verbose:
+            print(
+                f"Gen {gen + 1}: max={max(scores):.3f}, min={min(scores):.3f}, "
+                f"avg={avg_fitness:.3f}\n"
+            )
+
+    history_path = output_dir / f"{artifact_prefix}_history.csv"
+    with history_path.open("w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["gen", "max", "min", "avg"])
-        writer.writerows(history)
+        writer.writerow(["gen", "max", "min", "avg", "best_idx", "best_score"])
+        for row in history:
+            writer.writerow(
+                [
+                    row["gen"],
+                    row["max"],
+                    row["min"],
+                    row["avg"],
+                    row["best_idx"],
+                    row["best_score"],
+                ]
+            )
+
+    best_path = output_dir / f"{artifact_prefix}_best_chrom.json"
+    with best_path.open("w") as f:
+        json.dump(best_chrom, f, indent=2)
+
+    summary = {
+        "best_chrom": best_chrom,
+        "best_fitness": best_fitness,
+        "population_size": pop_size,
+        "generations": generations,
+        "elite_ratio": elite_ratio,
+        "mutation_rate": mutation_rate,
+        "mutation_scale": mutation_scale,
+        "num_games": num_games,
+        "depth": depth,
+        "seed": seed,
+        "board_size": board_size,
+        "opponent_chrom": opponent_chrom,
+        "history_file": str(history_path),
+        "best_file": str(best_path),
+    }
+    summary_path = output_dir / f"{artifact_prefix}_summary.json"
+    with summary_path.open("w") as f:
+        json.dump(summary, f, indent=2)
+
     return best_chrom, best_fitness

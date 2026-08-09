@@ -3,7 +3,6 @@
 #          alpha-beta pruning, quiescence search, and intelligent threat handling.
 
 import random
-from board import Board
 from AI.base import BaseAI
 from typing import Optional, Tuple, List
 from AI.pattern import Pattern
@@ -18,6 +17,8 @@ class HeuristicAIDepth(BaseAI):
 
     # ---------- Main entry ----------
     def get_move(self) -> Optional[Tuple[int, int]]:
+        if self.board.is_full():
+            return None
         if self.board.is_empty():
             return (self.board.size // 2, self.board.size // 2)
 
@@ -47,32 +48,29 @@ class HeuristicAIDepth(BaseAI):
 
     # ---------- Immediate win detection ----------
     def _find_immediate_win(self, player: int) -> Optional[Tuple[int, int]]:
-        for r in range(self.board.size):
-            for c in range(self.board.size):
-                if self.board.board[r][c] != 0:
-                    continue
-                self.board.board[r][c] = player
-                if self.board.check_win(player, [r, c]):
-                    self.board.board[r][c] = 0
+        for r, c in self.board.legal_moves():
+            self.board.board[r][c] = player
+            try:
+                if self.board.check_win(player, (r, c)):
                     return (r, c)
+            finally:
                 self.board.board[r][c] = 0
         return None
 
     # ---------- Forced defensive moves ----------
     def _get_forced_defensive_moves(self) -> List[Tuple[int, int]]:
         forced = []
-        for r in range(self.board.size):
-            for c in range(self.board.size):
-                if self.board.board[r][c] != 0:
-                    continue
-                self.board.board[r][c] = self.opponent
+        for r, c in self.board.legal_moves():
+            self.board.board[r][c] = self.opponent
+            try:
                 # Direct win for opponent
-                if self.board.check_win(self.opponent, [r, c]):
+                if self.board.check_win(self.opponent, (r, c)):
                     forced.append((r, c))
                 # Opponent creates live-four or double-three (unstoppable)
                 elif self._has_live_four(self.opponent, r, c) or \
                      self._has_double_three(self.opponent, r, c):
                     forced.append((r, c))
+            finally:
                 self.board.board[r][c] = 0
         return forced
 
@@ -134,6 +132,8 @@ class HeuristicAIDepth(BaseAI):
                             r, c = row + dr, col + dc
                             if 0 <= r < self.board.size and 0 <= c < self.board.size and self.board.board[r][c] == 0:
                                 candidates.add((r, c))
+        if not candidates:
+            return self.board.legal_moves()
         return list(candidates)
 
     # ---------- Line and evaluation ----------
@@ -193,26 +193,31 @@ class HeuristicAIDepth(BaseAI):
         directions = [(0,1),(1,0),(1,1),(1,-1)]
         old_my = 0
         old_op = 0
+        original = self.board.board[row][col]
+        if original != 0:
+            return float("-inf")
+
         for dr, dc in directions:
             line = self._get_line_string(row, col, dr, dc)
             old_my += self._evaluate_line(line, my_patterns)
             old_op += self._evaluate_line(line, op_patterns)
+        try:
+            self.board.board[row][col] = for_player
+            new_my = 0
+            for dr, dc in directions:
+                line = self._get_line_string(row, col, dr, dc)
+                new_my += self._evaluate_line(line, my_patterns)
+            attack_gain = new_my - old_my
 
-        self.board.board[row][col] = for_player
-        new_my = 0
-        for dr, dc in directions:
-            line = self._get_line_string(row, col, dr, dc)
-            new_my += self._evaluate_line(line, my_patterns)
-        attack_gain = new_my - old_my
+            self.board.board[row][col] = 3 - for_player
+            new_op = 0
+            for dr, dc in directions:
+                line = self._get_line_string(row, col, dr, dc)
+                new_op += self._evaluate_line(line, op_patterns)
+            defense_gain = new_op - old_op
+        finally:
+            self.board.board[row][col] = original
 
-        self.board.board[row][col] = 3 - for_player
-        new_op = 0
-        for dr, dc in directions:
-            line = self._get_line_string(row, col, dr, dc)
-            new_op += self._evaluate_line(line, op_patterns)
-        defense_gain = new_op - old_op
-
-        self.board.board[row][col] = 0
         return attack_gain + weight * defense_gain
 
     # ---------- Minimax with alpha-beta ----------
@@ -228,18 +233,21 @@ class HeuristicAIDepth(BaseAI):
             best_move = []
             max_eval = -float('inf')
             for r, c in candidates:
+                if self.board.board[r][c] != 0:
+                    continue
+                original = self.board.board[r][c]
                 self.board.board[r][c] = self.player
-                if self.board.check_win(self.player, [r, c]):
-                    self.board.board[r][c] = 0
-                    return (r, c), float('inf')
-                if self._has_forced_offense(self.player, r, c):
-                    self.board.board[r][c] = 0
-                    return (r, c), float('inf')
+                try:
+                    if self.board.check_win(self.player, (r, c)):
+                        return (r, c), float('inf')
+                    if self._has_forced_offense(self.player, r, c):
+                        return (r, c), float('inf')
 
-                gain = self._score_move_one_step(r, c, self.player)
-                new_score = current_score + gain
-                _, score = self.minimax(depth-1, alpha, beta, False, new_score)
-                self.board.board[r][c] = 0
+                    gain = self._score_move_one_step(r, c, self.player)
+                    new_score = current_score + gain
+                    _, score = self.minimax(depth - 1, alpha, beta, False, new_score)
+                finally:
+                    self.board.board[r][c] = original
 
                 if score > max_eval:
                     max_eval = score
@@ -256,18 +264,21 @@ class HeuristicAIDepth(BaseAI):
             min_eval = float('inf')
             opponent = 3 - self.player
             for r, c in candidates:
+                if self.board.board[r][c] != 0:
+                    continue
+                original = self.board.board[r][c]
                 self.board.board[r][c] = opponent
-                if self.board.check_win(opponent, [r, c]):
-                    self.board.board[r][c] = 0
-                    return (r, c), float('-inf')
-                if self._has_live_four(opponent, r, c) or self._has_double_three(opponent, r, c):
-                    self.board.board[r][c] = 0
-                    return (r, c), float('-inf')
+                try:
+                    if self.board.check_win(opponent, (r, c)):
+                        return (r, c), float('-inf')
+                    if self._has_live_four(opponent, r, c) or self._has_double_three(opponent, r, c):
+                        return (r, c), float('-inf')
 
-                gain = self._score_move_one_step(r, c, opponent)
-                new_score = current_score - gain
-                _, score = self.minimax(depth-1, alpha, beta, True, new_score)
-                self.board.board[r][c] = 0
+                    gain = self._score_move_one_step(r, c, opponent)
+                    new_score = current_score - gain
+                    _, score = self.minimax(depth - 1, alpha, beta, True, new_score)
+                finally:
+                    self.board.board[r][c] = original
 
                 if score < min_eval:
                     min_eval = score
@@ -311,27 +322,31 @@ class HeuristicAIDepth(BaseAI):
 
         if maximizing:
             for r, c in forced_moves:
+                original = self.board.board[r][c]
                 self.board.board[r][c] = self.player
-                if self.board.check_win(self.player, [r, c]):
-                    self.board.board[r][c] = 0
-                    return float('inf')
-                gain = self._score_move_one_step(r, c, self.player)
-                new_score = current_score + gain
-                score = self.quiescence_search(alpha, beta, False, new_score, max_qdepth-1)
-                self.board.board[r][c] = 0
+                try:
+                    if self.board.check_win(self.player, (r, c)):
+                        return float('inf')
+                    gain = self._score_move_one_step(r, c, self.player)
+                    new_score = current_score + gain
+                    score = self.quiescence_search(alpha, beta, False, new_score, max_qdepth - 1)
+                finally:
+                    self.board.board[r][c] = original
                 alpha = max(alpha, score)
                 if alpha >= beta: break
             return alpha
         else:
             for r, c in forced_moves:
+                original = self.board.board[r][c]
                 self.board.board[r][c] = self.opponent
-                if self.board.check_win(self.opponent, [r, c]):
-                    self.board.board[r][c] = 0
-                    return float('-inf')
-                gain = self._score_move_one_step(r, c, self.opponent)
-                new_score = current_score - gain
-                score = self.quiescence_search(alpha, beta, True, new_score, max_qdepth-1)
-                self.board.board[r][c] = 0
+                try:
+                    if self.board.check_win(self.opponent, (r, c)):
+                        return float('-inf')
+                    gain = self._score_move_one_step(r, c, self.opponent)
+                    new_score = current_score - gain
+                    score = self.quiescence_search(alpha, beta, True, new_score, max_qdepth - 1)
+                finally:
+                    self.board.board[r][c] = original
                 beta = min(beta, score)
                 if alpha >= beta: break
             return beta

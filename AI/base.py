@@ -1,32 +1,43 @@
-from abc import ABC, abstractmethod 
+from abc import ABC, abstractmethod
+
+
 class BaseAI(ABC):
     """
-    Base class for AI players in the Gomoku game.
-    All AI implementations should inherit from this class and implement the `get_move` method.
+    Base class for all player objects.
+    The concrete player can be a human, a heuristic AI, MCTS, or a future RL agent.
     """
 
     def __init__(self, board, player):
-        
-        """
-        Initialize the AI player.
-        """
         self.board = board
         self.player = player
 
+    def set_board(self, board):
+        """Rebind the player to a new board instance."""
+        self.board = board
+
+    def reset(self) -> None:
+        """Reset any internal state. Stateless players can ignore this."""
+        pass
+
+    def observe_move(self, player, move) -> None:
+        """Optional hook for future stateful agents to observe a move."""
+        pass
+
+    def on_game_end(self, result) -> None:
+        """Optional hook called when a game finishes."""
+        pass
+
     @abstractmethod
     def get_move(self) -> tuple[int, int] | None:
-        """
-        Core method to determine the AI's move based on the current state of the board.
-        All AI implementations must override this method to provide their move logic.
-        :return: A tuple (row, col) representing the AI's chosen move.
-                 If no moves are available (board is full), return None.
-        """
+        """Return the next move as (row, col), or None if no move is available."""
         pass
 
     def make_move(self) -> bool:
         move = self.get_move()
-        if move is not None:
-            return self.board.place(self.player, list(move))
-        return False
+        if move is None:
+            return False
 
-    
+        if hasattr(self.board, "apply_move"):
+            return self.board.apply_move(self.player, list(move))
+        return self.board.place(self.player, list(move))
+

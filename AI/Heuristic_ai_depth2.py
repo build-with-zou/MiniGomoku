@@ -3,8 +3,8 @@
 # and candidate pruning for speed.
 
 import random
-from board import Board
 from AI.base import BaseAI
+from AI.pattern import get_opponent_pattern_map, get_pattern_map
 from typing import Optional, Tuple, List
 
 
@@ -36,6 +36,8 @@ class HeuristicAIDepth2(BaseAI):
     # Main move selection: 2-ply minimax with incremental scoring
     # ----------------------------------------------------------------------
     def get_move(self) -> Optional[Tuple[int, int]]:
+        if self.board.is_full():
+            return None
         best_score = float('-inf')
         best_moves: List[Tuple[int, int]] = []
         opponent = 3 - self.player
@@ -52,26 +54,31 @@ class HeuristicAIDepth2(BaseAI):
         # Try every candidate move for the AI
         for r_ai, c_ai in candidates:
             # Simulate AI's move
+            if self.board.board[r_ai][c_ai] != 0:
+                continue
+            original_ai = self.board.board[r_ai][c_ai]
             self.board.board[r_ai][c_ai] = self.player
-            if self.board.check_win(self.player, [r_ai, c_ai]):
-                self.board.board[r_ai][c_ai] = 0  # Undo move
-                return (r_ai, c_ai)  # Immediate win
-            gain_ai = self._score_move_one_step(r_ai, c_ai, for_player=self.player)
-            after_ai_total = base_total + gain_ai
+            try:
+                if self.board.check_win(self.player, (r_ai, c_ai)):
+                    return (r_ai, c_ai)  # Immediate win
+                gain_ai = self._score_move_one_step(r_ai, c_ai, for_player=self.player)
+                after_ai_total = base_total + gain_ai
 
-            # Now opponent tries to minimize AI's total
-            worst_for_ai = float('inf')
-            for r_opp, c_opp in candidates:
-                if self.board.board[r_opp][c_opp] == 0:
-                    self.board.board[r_opp][c_opp] = opponent
-                    gain_opp = self._score_move_one_step(r_opp, c_opp, for_player=opponent)
-                    after_opp_total = after_ai_total - gain_opp  # opponent's gain hurts AI
-                    if after_opp_total < worst_for_ai:
-                        worst_for_ai = after_opp_total
-                    self.board.board[r_opp][c_opp] = 0
-
-            # Undo AI's move
-            self.board.board[r_ai][c_ai] = 0
+                # Now opponent tries to minimize AI's total
+                worst_for_ai = float('inf')
+                for r_opp, c_opp in candidates:
+                    if self.board.board[r_opp][c_opp] == 0:
+                        original_opp = self.board.board[r_opp][c_opp]
+                        self.board.board[r_opp][c_opp] = opponent
+                        try:
+                            gain_opp = self._score_move_one_step(r_opp, c_opp, for_player=opponent)
+                            after_opp_total = after_ai_total - gain_opp  # opponent's gain hurts AI
+                            if after_opp_total < worst_for_ai:
+                                worst_for_ai = after_opp_total
+                        finally:
+                            self.board.board[r_opp][c_opp] = original_opp
+            finally:
+                self.board.board[r_ai][c_ai] = original_ai
 
             # AI picks the move that gives the highest worst-case score
             if worst_for_ai > best_score:
@@ -130,21 +137,7 @@ class HeuristicAIDepth2(BaseAI):
     def _evaluate_board(self, for_player: Optional[int] = None) -> int:
         if for_player is None:
             for_player = self.player
-
-        if for_player == 1:
-            patterns = {
-                '0110': '活二', '01110': '活三', '011110': '活四',
-                '2110': '眠二', '0112': '眠二', '21110': '眠三',
-                '01112': '眠三', '211110': '眠四', '011112': '眠四',
-                '11111': '五',
-            }
-        else:
-            patterns = {
-                '0220': '活二', '02220': '活三', '022220': '活四',
-                '1220': '眠二', '0221': '眠二', '12220': '眠三',
-                '02221': '眠三', '122220': '眠四', '022221': '眠四',
-                '22222': '五',
-            }
+        patterns = get_pattern_map(for_player)
 
         total = 0
         size = self.board.size
@@ -183,36 +176,13 @@ class HeuristicAIDepth2(BaseAI):
         if for_player is None:
             for_player = self.player
         opponent = 3 - for_player
-
-        # Choose pattern dictionaries based on the player we are scoring
-        if for_player == 1:
-            my_patterns = {
-                '0110': '活二', '01110': '活三', '011110': '活四',
-                '2110': '眠二', '0112': '眠二', '21110': '眠三',
-                '01112': '眠三', '211110': '眠四', '011112': '眠四',
-                '11111': '五',
-            }
-            op_patterns = {
-                '0220': '活二', '02220': '活三', '022220': '活四',
-                '1220': '眠二', '0221': '眠二', '12220': '眠三',
-                '02221': '眠三', '122220': '眠四', '022221': '眠四',
-                '22222': '五',
-            }
-        else:
-            my_patterns = {
-                '0220': '活二', '02220': '活三', '022220': '活四',
-                '1220': '眠二', '0221': '眠二', '12220': '眠三',
-                '02221': '眠三', '122220': '眠四', '022221': '眠四',
-                '22222': '五',
-            }
-            op_patterns = {
-                '0110': '活二', '01110': '活三', '011110': '活四',
-                '2110': '眠二', '0112': '眠二', '21110': '眠三',
-                '01112': '眠三', '211110': '眠四', '011112': '眠四',
-                '11111': '五',
-            }
+        my_patterns = get_pattern_map(for_player)
+        op_patterns = get_opponent_pattern_map(for_player)
 
         directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
+        original = self.board.board[row][col]
+        if original != 0:
+            return float('-inf')
 
         # Baseline scores before placing any piece
         old_my = 0
@@ -222,23 +192,24 @@ class HeuristicAIDepth2(BaseAI):
             old_my += self._evaluate_line(line, my_patterns)
             old_op += self._evaluate_line(line, op_patterns)
 
-        # Gain when for_player occupies the cell
-        self.board.board[row][col] = for_player
-        new_my = 0
-        for dr, dc in directions:
-            line = self._get_line_string(row, col, dr, dc)
-            new_my += self._evaluate_line(line, my_patterns)
-        attack_gain = new_my - old_my
+        try:
+            # Gain when for_player occupies the cell
+            self.board.board[row][col] = for_player
+            new_my = 0
+            for dr, dc in directions:
+                line = self._get_line_string(row, col, dr, dc)
+                new_my += self._evaluate_line(line, my_patterns)
+            attack_gain = new_my - old_my
 
-        # Gain when opponent occupies the cell (defensive importance)
-        self.board.board[row][col] = opponent
-        new_op = 0
-        for dr, dc in directions:
-            line = self._get_line_string(row, col, dr, dc)
-            new_op += self._evaluate_line(line, op_patterns)
-        defense_gain = new_op - old_op
-
-        # Restore empty cell
-        self.board.board[row][col] = 0
+            # Gain when opponent occupies the cell (defensive importance)
+            self.board.board[row][col] = opponent
+            new_op = 0
+            for dr, dc in directions:
+                line = self._get_line_string(row, col, dr, dc)
+                new_op += self._evaluate_line(line, op_patterns)
+            defense_gain = new_op - old_op
+        finally:
+            # Restore empty cell
+            self.board.board[row][col] = original
 
         return attack_gain + weight * defense_gain

@@ -1,124 +1,128 @@
 # File name : main.py
-# Content: A Gomoku game implementation in Python without any imported libraries.
-from AI.base import BaseAI
-from AI.Heuristic_ai_depth import HeuristicAIDepth
-from AI.MCTS_ai import MCTS_AI
-from human import Human
-from board import Board
+# Content: Console entry point for Gomoku.
+
 import json
 import os
 
+from AI.Heuristic_ai_depth import HeuristicAIDepth
+from AI.MCTS_ai import MCTS_AI
+from Training.config import BOARD_SIZE, OUTPUT_DIR
+from board import Board
+from human import Human
+
+
+def prompt_int(prompt, default=None, min_value=None, max_value=None):
+    while True:
+        raw = input(prompt).strip()
+        if raw == "" and default is not None:
+            return default
+        try:
+            value = int(raw)
+        except ValueError:
+            print("Invalid input. Please enter an integer.")
+            continue
+        if min_value is not None and value < min_value:
+            print(f"Please enter a number >= {min_value}.")
+            continue
+        if max_value is not None and value > max_value:
+            print(f"Please enter a number <= {max_value}.")
+            continue
+        return value
+
+
+def prompt_choice(prompt, choices, default=None):
+    allowed = {str(choice) for choice in choices}
+    while True:
+        raw = input(prompt).strip()
+        if raw == "" and default is not None:
+            return default
+        if raw in allowed:
+            return raw
+        print(f"Invalid choice. Choose one of: {', '.join(sorted(allowed))}.")
+
+
+def load_weights_from_path(depth):
+    default_path = OUTPUT_DIR / f"best_chrom_depth_{depth}.json"
+    filepath = input(f"Enter weights file path (default: {default_path}): ").strip()
+    if not filepath:
+        filepath = str(default_path)
+    if os.path.exists(filepath):
+        with open(filepath, "r") as f:
+            return json.load(f), filepath
+    print(f"File not found: {filepath}, using default weights instead.")
+    return None, filepath
+
+
+def build_players(board):
+    print("Do you want to play against the AI? (y/n):")
+    cin = input().strip().lower()
+
+    if cin == "test":
+        depth1 = prompt_int("Choose AI depth for player 1 (1-4): ", default=3, min_value=1, max_value=4)
+        depth2 = prompt_int("Choose AI depth for player 2 (1-4): ", default=3, min_value=1, max_value=4)
+        return (
+            HeuristicAIDepth(board, 1, depth=depth1),
+            HeuristicAIDepth(board, 2, depth=depth2),
+            None,
+        )
+
+    if cin != "y":
+        return Human(board, 1), Human(board, 2), None
+
+    human_player = prompt_choice("Do you want to be Player 1 or Player 2? (Enter 1 or 2): ", choices=["1", "2"], default="1")
+    human_player = int(human_player)
+    ai_player = 2 if human_player == 1 else 1
+
+    print("Choose AI type:")
+    print("  1: HeuristicAI (depth search)")
+    print("  2: MCTS AI (Monte Carlo Tree Search)")
+    ai_type = prompt_choice("Enter 1 or 2 (default 1): ", choices=["1", "2"], default="1")
+
+    if ai_type == "1":
+        depth = prompt_int("Choose an AI difficulty level (1-4, default 3): ", default=3, min_value=1, max_value=4)
+        use_ga = input("Use GA optimized weights? (y/n): ").strip().lower() == "y"
+        weights = None
+        if use_ga:
+            weights, _ = load_weights_from_path(depth)
+
+        if ai_player == 1:
+            return (
+                HeuristicAIDepth(board, ai_player, depth=depth, weights=weights),
+                Human(board, human_player),
+                {"type": "heuristic", "depth": depth, "weights": weights},
+            )
+        return (
+            Human(board, human_player),
+            HeuristicAIDepth(board, ai_player, depth=depth, weights=weights),
+            {"type": "heuristic", "depth": depth, "weights": weights},
+        )
+
+    times = prompt_int("Enter MCTS simulation times per move (default 1000): ", default=1000, min_value=1)
+    if ai_player == 1:
+        return (
+            MCTS_AI(board, player=ai_player, times=times),
+            Human(board, human_player),
+            {"type": "mcts", "times": times},
+        )
+    return (
+        Human(board, human_player),
+        MCTS_AI(board, player=ai_player, times=times),
+        {"type": "mcts", "times": times},
+    )
+
+
 def main():
     print("Welcome to Gomoku!")
-    # Initialize the board size, default is 15x15
-    size = 15
-    while True:
-        print(f"Enter board size (default {size}):")
-        input_size = input()
-        if input_size == "":
-            break
-        elif input_size.isdigit() and 5 <= int(input_size) :
-            size = int(input_size)
-            break
-        else:
-            print("Invalid input. Please enter a number between 5 and 25, or press Enter to use the default size.")
+    size = prompt_int(
+        f"Enter board size (default {BOARD_SIZE}): ",
+        default=BOARD_SIZE,
+        min_value=5,
+        max_value=25,
+    )
     board = Board(size)
+    player1, player2, _ = build_players(board)
 
-    # Create players based on user choice: Human vs AI or Human vs Human
-    print("Do you want to play against the AI? (y/n):")
-    cin = input()
-    if cin == "test":
-        print("Choose an AI difficulty level(from 1 to 4) for player 1:")
-        while True:
-            ai_choice = input("1: Easy, 2: Medium, 3: Hard, 4: Expert (default 3): ")
-            if ai_choice in ['1', '2', '3', '4']:
-                break
-            print("Invalid choice, please enter a number between 1 and 4.")
-        print("Choose an AI difficulty level(from 1 to 4) for player 2:")
-        while True:
-            ai_choice2 = input("1: Easy, 2: Medium, 3: Hard, 4: Expert (default 3): ")
-            if ai_choice2 in ['1', '2', '3', '4']:
-                break
-            print("Invalid choice, please enter a number between 1 and 4.")
-        player1 = HeuristicAIDepth(board, 1, depth=int(ai_choice))
-        player2 = HeuristicAIDepth(board, 2, depth=int(ai_choice2))
-
-    else:
-        play_ai = cin.lower() == 'y'
-
-        if play_ai:
-            print("Do you want to be Player 1 or Player 2? (Enter 1 or 2):")
-            human_player = 1 if int(input()) == 1 else 2
-            ai_player = 2 if human_player == 1 else 1
-
-            
-            print("Choose AI type:")
-            print("  1: HeuristicAI (depth search)")
-            print("  2: MCTS AI (Monte Carlo Tree Search)")
-            ai_type = input("Enter 1 or 2 (default 1): ").strip() or "1"
-            while ai_type not in ['1', '2']:
-                ai_type = input("Invalid choice, enter 1 or 2: ").strip() or "1"
-           
-
-            if ai_type == '1':
-                print("Choose an AI difficulty level(from 1 to 4):")
-                while True:
-                    ai_choice = input("1: Easy, 2: Medium, 3: Hard, 4: Expert (default 3): ") or "3"
-                    if ai_choice in ['1', '2', '3', '4']:
-                        break
-                    print("Invalid choice, please enter a number between 1 and 4.")
-                if ai_choice not in ['1', '2', '3', '4']:
-                    print("Invalid choice, defaulting to level 3.")
-                    ai_choice = '3'
-                depth = int(ai_choice)
-
-                # Ask if using GA optimized weights
-                use_ga = input("Use GA optimized weights? (y/n): ").lower() == 'y'
-                weights = None
-                if use_ga:
-                    default_path = f"Training/output/best_chrom_depth_{depth}.json"
-                    filepath = input(f"Enter weights file path (default: {default_path}): ").strip()
-                    if not filepath:
-                        filepath = default_path
-                    if os.path.exists(filepath):
-                        with open(filepath, 'r') as f:
-                            weights = json.load(f)
-                        print(f"Loaded weights from {filepath}")
-                    else:
-                        print(f"File not found: {filepath}, using default weights instead.")
-
-                if ai_player == 1:
-                    player1 = HeuristicAIDepth(board, ai_player, depth=depth, weights=weights)
-                    player2 = Human(board, human_player)
-                else:
-                    player1 = Human(board, human_player)
-                    player2 = HeuristicAIDepth(board, ai_player, depth=depth, weights=weights)
-
-            else:  
-                print("Enter MCTS simulation times per move (default 1000):")
-                sim_input = input().strip()
-                if sim_input == "":
-                    times = 1000
-                else:
-                    try:
-                        times = int(sim_input)
-                    except ValueError:
-                        print("Invalid input, using default 1000.")
-                        times = 1000
-
-                if ai_player == 1:
-                    player1 = MCTS_AI(board, player=ai_player, times=times)
-                    player2 = Human(board, human_player)
-                else:
-                    player1 = Human(board, human_player)
-                    player2 = MCTS_AI(board, player=ai_player, times=times)
-
-        else:
-            player1 = Human(board, 1)
-            player2 = Human(board, 2)
-
-    # The main loop of the game.
-    current_player = player1   
+    current_player = player1
     while True:
         board.print_board()
         print("-" * (board.size * 2 - 1))
@@ -127,30 +131,40 @@ def main():
         move = current_player.get_move()
         if move is None:
             print(f"Player {current_player.player} has no valid moves. Game ends in a draw.")
+            for player in (player1, player2):
+                if hasattr(player, "on_game_end"):
+                    player.on_game_end(0)
             break
 
-        row, col = move
-
-        # Perform the move and check if it's valid. The get_move method should ensure that the move is valid, but we check again just in case.
-        if not board.place(current_player.player, [row, col]):
+        if not board.apply_move(current_player.player, move):
             print("Invalid move, try again.")
             continue
 
-        print(f"Player {current_player.player} placed a piece at ({row+1}, {col+1}).")
-        # Check for a win condition after the move. If the current player wins, print the board and announce the winner, then break the loop to end the game.
-        if board.check_win(current_player.player, [row, col]):
+        row, col = move
+        print(f"Player {current_player.player} placed a piece at ({row + 1}, {col + 1}).")
+
+        for player in (player1, player2):
+            if hasattr(player, "observe_move"):
+                player.observe_move(current_player.player, move)
+
+        if board.check_win(current_player.player, move):
             board.print_board()
             print(f"Player {current_player.player} wins!")
+            for player in (player1, player2):
+                if hasattr(player, "on_game_end"):
+                    player.on_game_end(current_player.player)
             break
 
-        # Check for a draw condition. If the board is full and no player has won, print the board and announce a draw, then break the loop to end the game.
-        if all(cell != 0 for row_cells in board.board for cell in row_cells):
+        if board.is_full():
             board.print_board()
             print("It's a draw!")
+            for player in (player1, player2):
+                if hasattr(player, "on_game_end"):
+                    player.on_game_end(0)
             break
 
-        # Switch to the other player for the next turn. If the current player is player1, switch to player2, and vice versa.
         current_player = player2 if current_player == player1 else player1
+
 
 if __name__ == "__main__":
     main()

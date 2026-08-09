@@ -2,6 +2,7 @@
 import random
 
 from AI.base import BaseAI
+from AI.pattern import get_opponent_pattern_map, get_pattern_map
 from typing import Optional, Tuple
 
 class HeuristicAI(BaseAI):
@@ -18,6 +19,7 @@ class HeuristicAI(BaseAI):
         :param player: Player number that the AI represents (1 or 2)
         """
         super().__init__(board, player)  
+        self.opponent = 2 if player == 1 else 1
         # define pattern scores for both potential and sleep patterns
         self.shape_score = {
             "potential": {
@@ -39,21 +41,50 @@ class HeuristicAI(BaseAI):
         Feature :When there are multiple moves with the same highest score, the AI will randomly select one of them to add variability to its playstyle.
         Return : A tuple (row, col) representing the AI's chosen move, or None if no moves are available.
         """
+        if self.board.is_full():
+            return None
+
+        win_move = self._find_immediate_win(self.player)
+        if win_move is not None:
+            return win_move
+
+        forced_moves = self._get_forced_defensive_moves()
+        if forced_moves:
+            return random.choice(forced_moves)
+
         best_score = float('-inf')
         best_move = []
-        size = self.board.size
-        for r in range(size):
-            for c in range(size):
-                if self.board.board[r][c] == 0:  # only evaluate empty cells
-                    score = self._score_move(r, c)
-                    if score > best_score:
-                        best_score = score
-                        best_move = [(r, c)]
-                    elif score == best_score and best_move is not None:
-                        best_move.append((r, c))
+        for r, c in self.board.legal_moves():
+            score = self._score_move(r, c)
+            if score > best_score:
+                best_score = score
+                best_move = [(r, c)]
+            elif score == best_score:
+                best_move.append((r, c))
         if best_move:
-            return random.choice(best_move)  # Randomly choose one of the highest-scoring moves
+            return random.choice(best_move)
         return None
+
+    def _find_immediate_win(self, player: int) -> Optional[Tuple[int, int]]:
+        for row, col in self.board.legal_moves():
+            self.board.board[row][col] = player
+            try:
+                if self.board.check_win(player, (row, col)):
+                    return (row, col)
+            finally:
+                self.board.board[row][col] = 0
+        return None
+
+    def _get_forced_defensive_moves(self):
+        forced = []
+        for row, col in self.board.legal_moves():
+            self.board.board[row][col] = self.opponent
+            try:
+                if self.board.check_win(self.opponent, (row, col)):
+                    forced.append((row, col))
+            finally:
+                self.board.board[row][col] = 0
+        return forced
 
     # ----------------------------------------------------------------------
     # Below are helper methods for evaluating the board and scoring moves based on patterns. These methods are used internally by the get_move method to determine the best move for the AI.
@@ -102,34 +133,7 @@ class HeuristicAI(BaseAI):
         """
         if for_player is None:
             for_player = self.player
-
-        # Set the pattern dictionary based on the player being evaluated
-        if for_player == 1:
-            patterns = {
-                '0110': '活二',
-                '01110': '活三',
-                '011110': '活四',
-                '2110': '眠二',
-                '0112': '眠二',
-                '21110': '眠三',
-                '01112': '眠三',
-                '211110': '眠四',
-                '011112': '眠四',
-                '11111': '五',
-            }
-        else:
-            patterns = {
-                '0220': '活二',
-                '02220': '活三',
-                '022220': '活四',
-                '1220': '眠二',
-                '0221': '眠二',
-                '12220': '眠三',
-                '02221': '眠三',
-                '122220': '眠四',
-                '022221': '眠四',
-                '22222': '五',
-            }
+        patterns = get_pattern_map(for_player)
 
         total_score = 0
         size = self.board.size
@@ -173,81 +177,40 @@ class HeuristicAI(BaseAI):
         if for_player is None:
             for_player = self.player
 
-        if for_player == 1:
-            my_patterns = {
-                '0110': '活二',
-                '01110': '活三',
-                '011110': '活四',
-                '2110': '眠二',
-                '0112': '眠二',
-                '21110': '眠三',
-                '01112': '眠三',
-                '211110': '眠四',
-                '011112': '眠四',
-                '11111': '五',
-            }
-            opponent_patterns = {
-                '0220': '活二',
-                '02220': '活三',
-                '022220': '活四',
-                '1220': '眠二',
-                '0221': '眠二',
-                '12220': '眠三',
-                '02221': '眠三',
-                '122220': '眠四',
-                '022221': '眠四',
-                '22222': '五',
-            }
-        else:
-            my_patterns = {
-                '0220': '活二',
-                '02220': '活三',
-                '022220': '活四',
-                '1220': '眠二',
-                '0221': '眠二',
-                '12220': '眠三',
-                '02221': '眠三',
-                '122220': '眠四',
-                '022221': '眠四',
-                '22222': '五',
-            }
-            opponent_patterns = {
-                '0110': '活二',
-                '01110': '活三',
-                '011110': '活四',
-                '2110': '眠二',
-                '0112': '眠二',
-                '21110': '眠三',
-                '01112': '眠三',
-                '211110': '眠四',
-                '011112': '眠四',
-                '11111': '五',
-            }
+        my_patterns = get_pattern_map(for_player)
+        opponent_patterns = get_opponent_pattern_map(for_player)
         current_my_score = 0
         current_opponent_score = 0
         attack_score = 0
         defense_score = 0
         opponent = 3 - for_player  # Get the opponent's player number (1 or 2)
         directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
-        # Evaluate the current board state for the AI and opponent to establish a baseline score before simulating the move
-        for dr, dc in directions:
-            line = self._get_line_string(row, col, dr, dc)
-            current_my_score += self._evaluate_line(line, my_patterns)
-            current_opponent_score += self._evaluate_line(line, opponent_patterns)
-        # Evaluate the AI's own patterns for attack
-        self.board.board[row][col] = self.player  # Temporarily place the piece
-        for dr,dc in directions:
-            line = self._get_line_string(row, col, dr, dc)
-            attack_score += self._evaluate_line(line, my_patterns)
+        original = self.board.board[row][col]
+        if original != 0:
+            return float('-inf')
 
-        # Evaluate the opponent's patterns for defense
-        self.board.board[row][col] = opponent  # Temporarily place the opponent's piece
-        for dr, dc in directions:
-            line = self._get_line_string(row, col, dr, dc)
-            defense_score += self._evaluate_line(line, opponent_patterns)
+        try:
+            # Evaluate the current board state for the AI and opponent to establish a baseline score before simulating the move
+            for dr, dc in directions:
+                line = self._get_line_string(row, col, dr, dc)
+                current_my_score += self._evaluate_line(line, my_patterns)
+                current_opponent_score += self._evaluate_line(line, opponent_patterns)
 
-        self.board.board[row][col] = 0  # Undo the temporary move
-        return attack_score - current_my_score + weight * (defense_score - current_opponent_score)  # Combine attack and defense scores with a weight for defense
+            # Evaluate the AI's own patterns for attack
+            self.board.board[row][col] = for_player
+            for dr, dc in directions:
+                line = self._get_line_string(row, col, dr, dc)
+                attack_score += self._evaluate_line(line, my_patterns)
+
+            # Evaluate the opponent's patterns for defense
+            self.board.board[row][col] = opponent
+            for dr, dc in directions:
+                line = self._get_line_string(row, col, dr, dc)
+                defense_score += self._evaluate_line(line, opponent_patterns)
+        finally:
+            self.board.board[row][col] = original
+
+        return attack_score - current_my_score + weight * (defense_score - current_opponent_score)
 
 
             

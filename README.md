@@ -1,443 +1,319 @@
-**中文README附在英文README后面，供中文用户参考。英文README是主版本，中文README会定期同步更新。**
-# 🎯 Gomoku – Python Implementation
+# MiniGomoku 五子棋
 
-A pure Python implementation of the classic Gomoku (Five in a Row) board game. No third‑party libraries required. The game supports customizable board sizes, two‑player mode, multiple built‑in AI opponents with different strategies, and a graphical user interface (GUI). The project is structured to allow future extensions toward a self‑training reinforcement learning AI.
+这是一个纯 Python 的五子棋项目，当前版本已经完成一次较大的结构整理。现在的核心思路很明确：
 
----
+- `board.py` 是规则唯一来源
+- `AI/pattern.py` 统一维护棋形和染色体
+- `AI/base.py` 统一玩家接口，后面可以直接接自我对弈和强化学习
+- 现有 AI 保留，不新增新 AI 类型
+- 训练、命令行、GUI、测试都已经按同一套接口对齐
 
-## ✨ Current Features
-
-- ✅ Pure Python – zero external dependencies
-- ✅ Customizable board size (default 15×15)
-- ✅ Clean console board display with row/column labels
-- ✅ Fast win detection based on the last move only (O(1) complexity)
-- ✅ Robust input validation and error messages
-- ✅ Draw detection (when the board is full)
-- ✅ **Multiple AI strategies**:
-  - `HeuristicAI` – greedy one‑step pattern scoring (fast)
-  - `HeuristicAIDepth` – configurable depth minimax search with **alpha‑beta pruning**, incremental evaluation, and quiescence search (depth 1–4)
-  - `MCTS_AI` – Monte Carlo Tree Search with **random rollout** and **forced threat detection** (live‑four, rush‑four, double‑three), offering a probabilistic alternative to minimax
-  - **Smart threat detection** – all AIs distinguish between their own offensive threats and opponent threats, responding aggressively to win while avoiding over‑defending minor setups
-- ✅ **Graphical User Interface (GUI)** using built‑in `tkinter` – click to play, with status bar and restart
-- ✅ **Human vs AI**, **Human vs Human**, and **AI vs AI** (test mode) in command line, plus GUI versions of all modes
-- ✅ **Unified player interface**: human and AI players are treated identically, making it easy to add new AI opponents
-- ✅ Incremental board evaluation for fast move scoring (only affected lines recomputed)
-- ✅ **Pattern module** – all pattern dictionaries and scoring weights are centralized in `pattern.py` for easy customization and future automatic tuning
-- ✅ **Genetic algorithm successfully trained** – the AI’s evaluation weights have been automatically optimized via a genetic algorithm; the best chromosome is available and can be loaded to instantly improve the AI's playing strength
-- ✅ **Multi‑process parallel training** – fitness evaluations run in parallel across CPU cores via `ProcessPoolExecutor`; a single `workers` parameter controls the level of parallelism, dramatically speeding up the genetic search
+详细改动说明见 [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md)。
 
 ---
 
-## 🚀 Quick Start
+## 现在能做什么
 
-### Run the Game
+- 命令行对战
+- 图形界面对战
+- 人机对战
+- AI 对 AI 调试
+- 遗传算法调参
+- 基础回归测试
 
-#### Command Line (original)
+当前实现的是自由五子棋规则，连五及以上均算胜利；黑棋禁手、交换规则、开局库这些还没加。
+
+---
+
+## 快速开始
+
+### 运行命令行版
 ```bash
 python main.py
 ```
 
-#### GUI
+### 运行图形界面版
 ```bash
 python gui.py
 ```
 
-### Game Mode Selection
-
-**In command line:**
-- **Two‑Player Mode**: two human players take turns.
-- **Human vs AI Mode**: play against the AI, choose your side, and select the AI type and difficulty.
-- **AI vs AI (Test)**: enter `test` when asked for game mode, then set parameters for both AIs.
-
-**In GUI:**
-- A dialog asks for board size, whether to play against AI, your side, AI type, and AI difficulty.  
-- Click on the board to place your piece; the AI responds automatically.
-
-### Rules
-
-- Player 1 uses **1** (Black), Player 2 uses **2** (White)
-- Players take turns entering coordinates or clicking on the board (both starting from 1)
-- The first player to align five pieces horizontally, vertically, or diagonally wins
-
----
-
-## 📁 Project Structure
-
-```
-.
-├── main.py                       # Command‑line program (game loop, user interaction)
-├── gui.py                        # Graphical user interface (tkinter)
-├── board.py                      # Board class (board state, move validation, win detection)
-├── human.py                      # Human player class (console input)
-├── AI/
-│   ├── base.py                   # Abstract base class for all AI players
-│   ├── Heuristic_ai.py           # Greedy one‑step heuristic AI
-│   ├── Heuristic_ai_depth2.py    # (Legacy) 2‑ply minimax AI (kept for reference)
-│   ├── Heuristic_ai_depth.py     # Configurable‑depth minimax AI with alpha‑beta pruning
-│   ├── MCTS_ai.py                # MCTS AI with forced threat detection
-│   ├── MCTS_node.py              # MCTS tree node class
-│   └── pattern.py                # Pattern definitions and scoring weights (supports GA chromosomes)
-├── training/
-│   ├── config.py                 # Gene bounds, chromosome length, default weights
-│   ├── arena.py                  # Headless game engine and fitness evaluation
-│   ├── genetic.py                # Genetic operators (selection, crossover, mutation) and GA loop (supports parallel evaluation)
-│   ├── run_tuning.py             # Entry point to start GA training
-│   └── output/                   # Training results (best_chrom.json, history.csv)
-└── README.md                     # Project documentation
-```
-
-> *Note: All game‑specific logic (Board, players, AI) is cleanly separated into dedicated modules. The GUI is fully decoupled from the command‑line interface. The training pipeline is also independent and can be run without the GUI.*
-
----
-
-## 🔧 Core Classes
-
-### `Board(size=15)`
-
-| Method                               | Description                                                                                |
-| ------------------------------------ | ------------------------------------------------------------------------------------------ |
-| `place(player, [row, col])`          | Places a piece at the given position. Returns `True` if successful. Indices are 0‑based.   |
-| `check_win(player, [row, col])`      | Checks whether the specified player has won after placing a piece at `[row, col]`.         |
-| `is_empty()` / `is_full()`           | Returns whether the board is empty or full.                                                |
-| `print_board()`                      | Prints the current board state with row and column labels.                                  |
-
-### `BaseAI` (Abstract Base Class)
-
-All AI and human players inherit from `BaseAI`, which defines the required interface:
-
-| Method                 | Description                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------ |
-| `get_move()`           | Returns a `(row, col)` tuple representing the AI's chosen move, or `None` if no moves are available. |
-| `make_move()`          | Executes the move by calling `get_move()` and placing the piece on the board.   |
-
-### `HeuristicAI(BaseAI)`
-
-A fast greedy scoring AI that evaluates only the four lines passing through each candidate move. It balances offensive and defensive pattern scores (open two, open three, etc.) using a configurable weight.
-
-### `HeuristicAIDepth(BaseAI)`
-
-**The main AI for adjustable difficulty.**  
-Uses a minimax search with **alpha‑beta pruning** and **candidate pruning** (only cells near existing stones). The search depth is configurable (default 3).  
-To keep the search fast, it employs **incremental evaluation**: it maintains a total board score and updates it only along the four lines affected by a simulated move, avoiding full‑board scans during search.  
-A **quiescence search** extends the search at leaf nodes to examine compulsory moves (live‑four, rush‑four, double‑three), greatly reducing horizon‑effect blunders.  
-**Threat detection is now role‑aware**: the AI treats its own rush‑four, live‑four, and double‑three as immediate winning moves, while only blocking the opponent’s truly unstoppable threats (one‑move wins, live‑four, double‑three). This prevents over‑defending against minor opponent patterns while maintaining a sharp offensive eye.  
-An **immediate win check** at the root ensures the AI never overlooks a direct winning move, even if that move lies outside the usual candidate set.  
-The AI can also accept an optional `weights` parameter (a chromosome) that directly sets its evaluation parameters, enabling seamless integration with the genetic algorithm training pipeline.  
-**The weights have been optimized via genetic algorithm** — a trained chromosome is available and can be loaded to immediately boost the AI's performance.  
-Set `depth=1` for greedy strength, `depth=2` for basic tactics, `depth=3‑4` for stronger play (requires more CPU time at depth 4).
-
-### `MCTS_AI(BaseAI)`
-
-**A Monte Carlo Tree Search AI.**  
-This AI uses the classic MCTS algorithm with **random rollout** as the default simulation strategy. It builds an asymmetric search tree and selects the move with the highest visit count after a given number of simulations (`times` parameter).  
-To compensate for the short‑sightedness of pure random playouts, the AI integrates **forced threat detection** at the root node:  
-- It checks for its own immediate winning move and plays it instantly.  
-- It scans for opponent threats that must be blocked (direct win, live‑four, double‑three) and blocks them as a priority.  
-This makes the MCTS AI tactically reliable while retaining the flexibility of a probabilistic search.  
-The simulation count can be adjusted (e.g., `times=1000` for a balance of speed and strength). Higher values yield stronger play at the cost of longer thinking time. Candidate moves are pruned to cells near existing stones to reduce the branching factor.
-
-### `Pattern`
-
-Centralizes all pattern dictionaries and scoring weights for the heuristic evaluation. It now supports receiving a chromosome (list of 10 values) via `set_weights()` or the constructor, which instantly reconfigures the evaluation function. This makes it the bridge between the AI and the genetic algorithm optimizer.
-
-### `Training` module
-
-The `training/` directory contains a self‑contained pipeline for automatically tuning the AI’s evaluation weights:
-- `config.py` – defines the search space (gene bounds) and default chromosome.
-- `arena.py` – provides a headless game engine (`play_game`) and a fitness function (`compute_fitness`) that evaluates a chromosome by playing against a fixed opponent.
-- `genetic.py` – implements tournament selection, uniform crossover, gaussian mutation, and the main `run_ga` loop. The loop prints real‑time progress (generation, individual, game number) and saves a history log (`history.csv`). **Evaluation runs in parallel across multiple CPU cores** using `ProcessPoolExecutor`; the `workers` parameter controls how many processes are used (defaults to all available cores), enabling dramatic speed‑ups for large populations.
-- `run_tuning.py` – entry point that starts the GA and saves the best chromosome to `training/output/best_chrom.json`.
-
-A successfully trained chromosome is already available in `training/output/`. To use it, load the JSON file and pass it as `weights` when creating the AI.
-
-### `Human(BaseAI)`
-
-Implements the same interface as AI players, obtaining moves from console input. In the GUI, human input is handled by mouse clicks, but the class is still used for console mode.
-
----
-
-## 🧠 Future Roadmap (Towards a Self‑Training Gomoku AI)
-
-### 📌 Phase 1: Heuristic AI Foundation ✅
-- [x] Board evaluation via pattern recognition
-- [x] Greedy one‑step AI opponent
-- [x] Configurable‑depth minimax with alpha‑beta pruning
-- [x] Incremental evaluation for speed
-- [x] Human vs AI gameplay (console + GUI)
-- [x] Modular player interface for easy AI swapping
-- [x] Smart threat detection with role‑aware offense/defense
-- [x] Quiescence search for tactical stability
-
-### 📌 Phase 2: Stronger Search & Automatic Tuning
-- [ ] Improve move ordering for deeper pruning
-- [x] **Genetic algorithm successfully trained** – chromosome‑based weight optimization has been executed and produced an optimized set of evaluation parameters
-- [ ] Add more sophisticated patterns (jump‑three, jump‑four, double‑threat recognition)
-
-### 📌 Phase 3: Deep Reinforcement Learning (AlphaZero Style)
-- [x] **Basic MCTS implemented** – Monte Carlo Tree Search with random rollout and forced threat detection
-- [ ] Build a residual neural network (policy + value heads) using PyTorch
-- [ ] Integrate neural network into MCTS for guided search
-- [ ] Multi‑channel board state encoding
-
-### 📌 Phase 4: Self‑Play and Data Generation
-- [ ] Self‑play data generator
-- [ ] Replay buffer implementation
-- [ ] Training loop with policy loss and value loss
-
-### 📌 Phase 5: Full Self‑Training Pipeline
-- [ ] Automated iteration: self‑play → training → evaluation → model update
-- [ ] Model checkpoint saving and loading
-- [ ] Training visualization (win rate curves, loss curves)
-
----
-
-## ⚠️ Current Limitations & Near‑Term Improvements
-
-1. **GA‑optimized weights available, but further tuning possible** – A first round of genetic optimization has been completed and the best chromosome is saved. However, the search space (gene bounds) and evaluation precision (number of games, depth) can still be increased for even better results.  
-   *Plan: run larger‑scale GA experiments with higher depth and more games.*
-2. **Limited pattern set** – Only continuous lines are considered; jump‑three, jump‑four, and double‑threat patterns (beyond simple detection) are missing.  
-   *Plan: extend the pattern library for finer positional judgment.*
-3. **Horizon effect in complex forced sequences** – Although quiescence search and forced‑threat detection have greatly reduced mis‑evaluations, very long forced win sequences can still be truncated at extreme depths.  
-   *Plan: increase quiescence depth dynamically or implement a specialised capture search.*
-4. **No opening book** – The AI relies entirely on search from the first move.  
-   *Plan: add a small opening book or use self‑play data to learn openings.*
-5. **MCTS simulation performance** – The MCTS AI currently uses random rollouts, which require many simulations to achieve decent play. This can be improved by replacing random rollouts with a neural network evaluator or heuristic‑guided rollouts. The simulation count and candidate move pruning parameters can be tuned for a balance of speed and strength.
-
----
-
-## 🤝 Contributing
-
-Issues and Pull Requests are welcome! Areas where contributions are especially appreciated:
-
-- Improving AI scoring weights or adding more sophisticated patterns
-- Implementing additional AI difficulty levels (e.g., MCTS‑based AI)
-- Enhancing the GUI (better graphics, animations, undo button)
-- Adding undo, game saving, and replay functionality
-- Implementing standard professional rules (black forbidden moves, swap opening, etc.)
-- Writing unit tests for the AI module
-
----
-
-**Enjoy the game! 🎲**
-
-
-
-# 🎯 Gomoku (五子棋) – Python 实现
-
-一个纯 Python 实现的五子棋游戏，无需任何第三方库。支持自定义棋盘大小、双人对战、多种策略的 AI 对手以及图形用户界面（GUI）。项目已为后续强化学习扩展预留接口。
-
----
-
-## ✨ 当前功能
-
-- ✅ 纯 Python 实现，零外部依赖
-- ✅ 可自定义棋盘尺寸（默认 15×15）
-- ✅ 清晰的控制台棋盘显示（带行列号）
-- ✅ 基于最后落子位置的快速赢棋检测（O(1) 复杂度）
-- ✅ 完善的输入校验与错误提示
-- ✅ 平局检测（棋盘下满）
-- ✅ **多种 AI 策略**：
-  - `HeuristicAI` – 贪心一步评分（快速）
-  - `HeuristicAIDepth` – 可调深度的极小极大搜索，带 **Alpha‑Beta 剪枝**、增量评估和静态搜索（深度 1‑4）
-  - `MCTS_AI` – 蒙特卡洛树搜索，结合**随机模拟**与**强制威胁检测**（活四、冲四、双活三），提供了一种概率化的搜索选择
-  - **智能威胁检测** – 所有 AI 都能区分自己的进攻威胁与对手的威胁，积极争胜的同时避免对次要对手棋型过度防守
-- ✅ **图形用户界面（GUI）**（基于内置 `tkinter`）– 点击落子，状态栏提示，支持重新开始
-- ✅ 支持 **人机对战**、**人人对战** 以及 **AI 对 AI 测试**（命令行），GUI 也包含前两种模式
-- ✅ **统一的玩家接口**：人类与 AI 被同等对待，易于增加新的 AI 对手
-- ✅ 增量棋盘评估：每次只计算落子点相关线条的分数变化，大幅提高搜索速度
-- ✅ **Pattern 模块** – 所有模式字典和评分权重集中管理，便于定制和将来自动调参
-- ✅ **遗传算法已成功训练** – AI 的评估权重已通过遗传算法自动优化；最优染色体已保存，可直接加载使用，立竿见影提升 AI 棋力
-- ✅ **多进程并行训练** – 适应度评估通过 `ProcessPoolExecutor` 在多核 CPU 上并行执行；一个 `workers` 参数即可控制并行度，显著加速遗传搜索
-
----
-
-## 🚀 快速开始
-
-### 运行游戏
-
-#### 命令行模式
+### 运行基础测试
 ```bash
-python main.py
+python -m unittest discover -s tests
 ```
 
-#### 图形界面模式
+### 查看训练入口参数
 ```bash
-python gui.py
+python Training/run_tuning.py --help
 ```
-
-### 游戏模式选择
-
-**命令行下：**
-- **双人对战**：两名人类玩家轮流落子。
-- **人机对战**：选择与 AI 对战，指定自己执先手或后手，并选择 AI 类型和难度。
-- **AI 测试**：在问及游戏模式时输入 `test`，即可设置两名 AI 的参数，观看 AI 对战。
-
-**GUI 下：**
-- 启动后会弹出对话框，依次设置棋盘大小、是否人机对战、你的棋子颜色、AI 类型、AI 难度。  
-- 点击棋盘交叉点落子，AI 会自动回应。
-
-### 游戏规则
-
-- 玩家 1 执 **1**（黑），玩家 2 执 **2**（白）
-- 轮流输入落子坐标或点击棋盘（行、列均从 1 开始计数）
-- 率先在横、竖、斜任一方向连成五子者获胜
 
 ---
 
-## 📁 项目结构
+## 命令行怎么玩
 
-```
+`main.py` 里会先让你输入棋盘大小，默认 `15`，有效范围是 `5` 到 `25`。
+
+随后会进入对局模式选择：
+
+- 输入 `n`：人人对战
+- 输入 `y`：人机对战
+- 输入 `test`：AI 对 AI 调试模式
+
+如果选择人机对战，还会继续让你选：
+
+- 自己执黑还是执白
+- AI 类型
+  - `1`：`HeuristicAIDepth`
+  - `2`：`MCTS_AI`
+- 若选启发式 AI，还可以设置搜索深度，并选择是否加载遗传算法优化后的权重文件
+
+命令行里人类输入支持：
+
+- `row col`
+- `row,col`
+- `row，col`
+
+内部坐标全部是 `0-based`，界面显示时才会转成 `1-based`。
+
+---
+
+## 项目结构
+
+```text
 .
-├── main.py                       # 命令行主程序（游戏循环与用户交互）
-├── gui.py                        # 图形用户界面（tkinter）
-├── board.py                      # Board 类（棋盘状态、落子验证、胜负判断）
-├── human.py                      # 人类玩家类（控制台输入）
+├── main.py
+├── gui.py
+├── board.py
+├── human.py
 ├── AI/
-│   ├── base.py                   # 所有 AI 的抽象基类
-│   ├── Heuristic_ai.py           # 贪心一步启发式 AI
-│   ├── Heuristic_ai_depth2.py    # （旧版）2层极小极大 AI（保留作为参考）
-│   ├── Heuristic_ai_depth.py     # 可调深度的极小极大 AI（带 Alpha‑Beta 剪枝）
-│   ├── MCTS_ai.py                # 带强制防守检测的 MCTS AI
-│   ├── MCTS_node.py              # MCTS 树节点类
-│   └── pattern.py                # 模式定义与评分权重（支持染色体参数）
-├── training/
-│   ├── config.py                 # 基因范围、染色体长度、默认权重
-│   ├── arena.py                  # 无渲染对局引擎与适应度评估
-│   ├── genetic.py                # 遗传算子（选择、交叉、变异）与GA主循环（支持并行评估）
-│   ├── run_tuning.py             # 启动GA训练的入口脚本
-│   └── output/                   # 训练结果（best_chrom.json, history.csv）
-└── README.md                     # 项目说明文档
+│   ├── base.py
+│   ├── pattern.py
+│   ├── Heuristic_ai.py
+│   ├── Heuristic_ai_depth.py
+│   ├── Heuristic_ai_depth2.py
+│   ├── MCTS_ai.py
+│   └── MCTS_node.py
+├── Training/
+│   ├── config.py
+│   ├── arena.py
+│   ├── genetic.py
+│   └── run_tuning.py
+├── tests/
+├── MODULE_TASK_PLAN.md
+├── TECHNICAL_REPORT.md
+└── README.md
 ```
 
-> *注：游戏逻辑 (Board, players, AI) 完全分离，GUI 与命令行界面彼此独立。训练模块同样独立，可不依赖 GUI 运行。*
+---
+
+## 核心模块
+
+### `board.py`
+
+现在它是棋盘规则和局面状态的唯一来源，负责：
+
+- `apply_move(player, pos)`：合法落子
+- `undo_move(pos=None)`：撤销落子
+- `legal_moves()`：返回所有可落点
+- `is_legal_move(pos)`：判断坐标是否合法
+- `check_win(player, pos)`：判断是否获胜
+- `clone()`：复制完整棋盘状态
+- `create_key()`：生成稳定局面 key，方便缓存和回放
+- `reset(size=None)`：重置棋盘
+
+为了兼容旧代码，也保留了：
+
+- `place()` -> `apply_move()`
+- `remove()` -> `undo_move()`
+
+它还会维护这些状态：
+
+- `move_history`
+- `last_move`
+- `move_count`
+- `current_player`
+- `cnt_player`
+
+### `human.py`
+
+`Human` 负责命令行输入解析和校验：
+
+- 同时支持空格和逗号分隔
+- 非整数、越界、占用位置都会给出单独提示
+- 校验通过后返回 `(row, col)`，内部使用 `0-based`
+
+### `AI/base.py`
+
+这是所有玩家对象的统一接口层，当前保留的方法有：
+
+- `get_move()`
+- `make_move()`
+- `reset()`
+- `set_board(board)`
+- `observe_move(player, move)`
+- `on_game_end(result)`
+
+这些 hook 不是为了现在就做复杂逻辑，而是给以后自我对弈、回放记录、强化学习留接口。
+
+### `AI/pattern.py`
+
+这里是启发式评估的共享中枢，统一维护：
+
+- 棋形字典
+- 玩家 1 / 玩家 2 的镜像关系
+- 默认分值
+- 染色体边界
+- 染色体合法性校验
+
+当前染色体长度是 `10`，对应：
+
+1. 活二
+2. 跳二
+3. 活三
+4. 跳三
+5. 活四
+6. 五
+7. 眠二
+8. 眠三
+9. 眠四
+10. `defense_weight`
+
+### `AI/Heuristic_ai.py`
+
+这是最基础的贪心启发式 AI，适合作为 baseline 或对照组。
+
+### `AI/Heuristic_ai_depth.py`
+
+这是当前主力搜索 AI，核心特点是：
+
+- 候选点剪枝
+- Alpha-Beta 剪枝
+- 静态搜索/静态延伸
+- 立即赢棋检查
+- 强制防守检查
+- 统一引用 `AI/pattern.py`
+- 支持可选 `weights` 染色体
+
+它是现在命令行和 GUI 里默认最常用的启发式 AI。
+
+### `AI/Heuristic_ai_depth2.py`
+
+保留为参考版 2-ply 搜索，不走主流程。
+
+### `AI/MCTS_node.py`
+
+MCTS 节点现在保留了更完整的信息：
+
+- `action`
+- `player_to_move`
+- `state_key`
+- `prior`
+- `depth`
+
+这些字段是给后续 PUCT、策略网络、转置表留口子的。
+
+### `AI/MCTS_ai.py`
+
+这是当前的 MCTS 实现，特点是：
+
+- 先查立即赢棋
+- 再查必须防守的强威胁
+- 树搜索时同步模拟盘
+- rollout 使用随机模拟
+- 空盘时候选点会回到中心
+
+### `Training/`
+
+训练相关内容已经统一放到 `Training/` 下：
+
+- `config.py`：默认棋盘大小、基因边界、染色体和输出目录
+- `arena.py`：无界面对局环境和适应度计算
+- `genetic.py`：遗传算法主循环，支持多进程并行评估
+- `run_tuning.py`：训练入口脚本
+
+训练输出默认写到 `Training/output/`，通常会生成：
+
+- `*_history.csv`
+- `*_best_chrom.json`
+- `*_summary.json`
+- 兼容旧命名的 `best_chrom_depth_{depth}.json`
+
+### `tests/`
+
+目前有最基础的回归测试：
+
+- `tests/test_board.py`
+- `tests/test_pattern.py`
+- `tests/test_human.py`
+
+它们覆盖了落子、撤销、克隆、五连判断、棋形镜像、染色体校验和输入重试。
 
 ---
 
-## 🔧 核心类说明
+## 训练怎么用
 
-### `Board(size=15)`
+遗传算法入口是：
 
-| 方法                                 | 描述                                                                         |
-| ------------------------------------ | ---------------------------------------------------------------------------- |
-| `place(player, [row, col])`          | 在指定位置落子，返回是否成功。行列索引从 0 开始。                            |
-| `check_win(player, [row, col])`      | 检测指定玩家在最新落子后是否获胜（仅检查落子点四个方向）。                    |
-| `is_empty()` / `is_full()`           | 返回棋盘是否为空或已满。                                                     |
-| `print_board()`                      | 在控制台打印当前棋盘状态（带行列号）。                                        |
+```bash
+python Training/run_tuning.py
+```
 
-### `BaseAI` (抽象基类)
+常用参数有：
 
-所有 AI 及人类玩家均继承自 `BaseAI`，它规定了必须实现的接口：
+- `--pop-size`
+- `--generations`
+- `--num-games`
+- `--depth`
+- `--seed`
+- `--output-dir`
+- `--artifact-prefix`
 
-| 方法                   | 描述                                                         |
-| ---------------------- | ------------------------------------------------------------ |
-| `get_move()`           | 返回 AI 选择的落子坐标 `(row, col)`，若无合法位置则返回 `None`。 |
-| `make_move()`          | 调用 `get_move()` 并在棋盘上落子。                            |
+训练时会调用 `Training/arena.py` 做对局评估，并在 `Training/genetic.py` 中用 `ProcessPoolExecutor` 并行计算适应度。
 
-### `HeuristicAI(BaseAI)`
+如果要加载训练出来的权重，启发式 AI 会优先读取：
 
-贪心一步评分 AI，只评估候选落子点四个方向上的棋形模式（活二、活三、活四等），平衡攻防分数后选择综合分最高的位置。速度极快，但缺乏长远规划。
-
-### `HeuristicAIDepth(BaseAI)`
-
-**可调节难度的主要 AI。**  
-采用带 **Alpha‑Beta 剪枝** 的极小极大搜索，并利用**候选点剪枝**（只搜索棋子周围空位）。搜索深度可通过 `depth` 参数设定（默认 3）。  
-为保证搜索速度，使用了**增量评估**：维护一个全局总分，每次模拟落子仅更新受影响的四条线，叶子节点直接返回总分，无需全盘重新扫描。  
-在叶子节点集成了**静态搜索**，能继续探索活四、冲四、双活三等强制走法，有效缓解地平线效应。  
-**威胁检测已实现角色分离**：AI 将自己的冲四、活四、双活三视为立即获胜的走法，而对对手的防守则只针对真正无法补救的威胁（直接连五、活四、双活三），避免对眠三等次要棋型的过度防守。  
-在根节点增加了**立即获胜检查**，确保 AI 不会遗漏任何直接连五的机会（即使该点不在常规候选范围内）。  
-AI 还可接受一个可选的 `weights` 参数（染色体），直接设定其评估参数，从而与遗传算法训练管道无缝集成。  
-**权重已通过遗传算法优化** — 训练好的染色体文件可直接加载，立竿见影提升 AI 表现。  
-设置 `depth=1` 可获得贪心强度，`depth=2` 获得基础战术，`depth=3‑4` 则更强（深度 4 时计算时间稍长）。
-
-### `MCTS_AI(BaseAI)`
-
-**基于蒙特卡洛树搜索的 AI。**  
-该 AI 使用经典的 MCTS 算法，默认采用**随机模拟（rollout）**作为评估策略。它构建一棵非对称搜索树，在指定模拟次数（`times` 参数）后选择访问次数最多的走法。  
-为弥补纯随机模拟缺乏紧迫感的缺陷，AI 在搜索根部集成了**强制威胁检测**：  
-- 主动检测自己能否一步获胜，并立即执行。  
-- 扫描对手的必杀威胁（直接连五、活四、双活三），并以最高优先级进行封堵。  
-这使得 MCTS AI 在战术上变得可靠，同时保留了概率化搜索的灵活性。  
-模拟次数可调节（如 `times=1000` 以平衡速度与强度）。更高的值会带来更强的棋力，但思考时间也会相应增加。候选走法被剪枝至已有棋子周围的空位，以降低搜索分支因子。
-
-### `Pattern`
-
-集中管理启发式评估所需的所有模式字典和评分权重。现在支持通过 `set_weights()` 或构造函数接收染色体（10个值的列表），即时重新配置评估函数，成为 AI 与遗传算法优化器之间的桥梁。
-
-### `Training` 模块
-
-`training/` 目录包含自动调优 AI 评估权重的完整管道：
-- `config.py` – 定义搜索空间（基因边界）和默认染色体。
-- `arena.py` – 提供无渲染对局引擎 (`play_game`) 和适应度函数 (`compute_fitness`)，通过让染色体与固定对手对战来评估其优劣。
-- `genetic.py` – 实现锦标赛选择、均匀交叉、高斯变异以及主循环 `run_ga`。循环会实时打印进度（代数、个体编号、比赛局数），并保存历史日志 (`history.csv`)。**评估过程通过 `ProcessPoolExecutor` 在多个 CPU 核心上并行执行**，通过 `workers` 参数控制并行进程数（默认使用全部核心），可显著缩短大规模种群的训练时间。
-- `run_tuning.py` – 启动 GA 训练并将最优染色体保存为 `training/output/best_chrom.json` 的入口。
-
-训练好的最优染色体已保存在 `training/output/` 目录下。使用时只需加载 JSON 文件，并在创建 AI 时作为 `weights` 参数传入即可。
-
-### `Human(BaseAI)`
-
-实现了与 AI 相同的接口，通过控制台获取用户输入。在 GUI 中，人类输入由鼠标点击处理，但该类仍用于命令行模式。
+```text
+Training/output/best_chrom_depth_{depth}.json
+```
 
 ---
 
-## 🧠 未来扩展路线（自训练五子棋 AI）
+## 这次重构后，后面好接什么
 
-### 📌 第一阶段：启发式 AI 基础 ✅
-- [x] 实现棋盘局面评分函数（连子模式识别）
-- [x] 贪心一步 AI 对手
-- [x] 可调深度极小极大搜索，带 Alpha‑Beta 剪枝
-- [x] 增量评估加速搜索
-- [x] 支持人机对战（命令行 + GUI）
-- [x] 模块化玩家接口，便于替换不同 AI
-- [x] 角色感知的智能威胁检测
-- [x] 静态搜索提升战术稳定性
+现在已经预留了这些接口：
 
-### 📌 第二阶段：更强的搜索与自动调参
-- [x] 走法排序以提升剪枝效率
-- [x] **遗传算法已成功训练** – 基于染色体的权重优化已执行完毕，产出了一组优化的评估参数
-- [x] 增加更丰富的棋形（跳活三、跳冲四、双重威胁识别等）
+- `Board.move_history`
+- `Board.create_key()`
+- `BaseAI.reset()`
+- `BaseAI.observe_move()`
+- `BaseAI.on_game_end()`
+- `BaseAI.set_board()`
+- `MCTSNode.state_key`
+- `MCTSNode.prior`
 
-### 📌 第三阶段：深度强化学习（AlphaZero 风格）
-- [x] **基础 MCTS 已实现** – 带随机模拟和强制威胁检测的蒙特卡洛树搜索
-- [ ] 使用 PyTorch 构建残差神经网络（策略+价值双输出）
-- [ ] 将神经网络集成到 MCTS 中进行指导搜索
-- [ ] 完成棋盘状态的多通道编码
+所以后面如果要做：
 
-### 📌 第四阶段：自我对弈与数据生成
-- [ ] 实现模型自我对弈数据生成器
-- [ ] 构建经验回放池（Replay Buffer）
-- [ ] 编写训练循环（策略损失 + 价值损失）
+- 自我对弈
+- Replay Buffer
+- 策略网络 / 价值网络
+- 神经网络引导的 MCTS
 
-### 📌 第五阶段：完整自训练 Pipeline
-- [ ] 自动化迭代训练流程：对弈 → 训练 → 评估 → 更新最优模型
-- [ ] 支持模型持久化保存与加载
-- [ ] 提供训练过程可视化（胜率曲线、loss 曲线）
+可以直接接现有骨架，不用再重造底层。
 
 ---
 
-## ⚠️ 当前局限与近期改进方向
+## 已知限制
 
-1. **GA 优化权重已产出，但仍有提升空间** – 首轮遗传优化已完成，最优染色体已保存。但搜索空间（基因边界）和评估精度（对局数、深度）仍可进一步提高，以获得更强的参数。  
-   *改进：运行更大规模的 GA 实验，提高深度和对局数。*
-2. **棋形模式有限** – 当前主要识别连续线型，对于跳活三、跳冲四等特殊形状支持不足。  
-   *改进：扩展模式库，提升局面判断精度。*
-3. **复杂连续对杀中的地平线效应** – 虽然静态搜索和强制威胁检测已大幅减少误判，极长强制序列仍可能被截断。  
-   *改进：动态调整静态搜索深度或引入专门捕获搜索。*
-4. **无开局知识** – AI 开局完全依赖搜索，缺乏定式。  
-   *改进：可添加小型开局库，或通过自对弈数据学习开局。*
-5. **MCTS 模拟效率** – MCTS AI 目前采用纯随机模拟，需要大量模拟次数才能达到可接受的棋力。未来可通过神经网络评估或启发式引导模拟来改进。模拟次数与候选点剪枝参数可根据速度与强度的平衡进行调优。
+- 还没有加入黑棋禁手
+- 还没有加入开局库
+- `Heuristic_ai_depth2.py` 只是参考实现
+- 目前的 MCTS 还是随机 rollout，不是神经网络版
+- GUI 目前支持人机和人人对战，不是 AI 对 AI 主界面
 
 ---
 
-## 🤝 贡献指南
+## 文档索引
 
-欢迎提交 Issue 与 Pull Request！如果你对以下方向感兴趣，尤其欢迎参与：
-- 优化 AI 评分权重或增加更丰富的棋形模式
-- 实现更多难度的 AI（如基于 MCTS 的 AI）
-- 增强 GUI（更美观的界面、动画、悔棋按钮）
-- 增加悔棋、保存棋谱、回放功能
-- 实现标准专业规则（黑棋禁手、三手交换、五手两打）
-- 为 AI 模块编写单元测试
+- [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md)：详细技术报告，适合回看重构具体改了什么
+- [MODULE_TASK_PLAN.md](MODULE_TASK_PLAN.md)：模块级执行清单，适合按步骤理解整个重构路线
 
----
-
-**Enjoy the game! 🎲**
