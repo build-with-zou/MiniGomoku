@@ -8,7 +8,6 @@
 - 现有 AI 保留，不新增新 AI 类型
 - 训练、命令行、GUI、测试都已经按同一套接口对齐
 
-详细改动说明见 [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md)。
 
 ---
 
@@ -311,9 +310,3 @@ Training/output/best_chrom_depth_{depth}.json
 - GUI 目前支持人机和人人对战，不是 AI 对 AI 主界面
 
 ---
-
-## 文档索引
-
-- [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md)：详细技术报告，适合回看重构具体改了什么
-- [MODULE_TASK_PLAN.md](MODULE_TASK_PLAN.md)：模块级执行清单，适合按步骤理解整个重构路线
-

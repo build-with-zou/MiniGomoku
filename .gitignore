@@ -1,0 +1,12 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.DS_Store
+.venv/
+data/selfplay/*.npz
+models/*.pt
+models/checkpoints/*.pt
+Training/output/*.json
+Training/output/*.csv
