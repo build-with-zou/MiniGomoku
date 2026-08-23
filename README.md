@@ -46,6 +46,23 @@ python -m unittest discover -s tests
 python Training/run_tuning.py --help
 ```
 
+### 学习如何搭建可学习 AI
+
+如果你有深度学习基础，但还没有搭建过棋类 AI，建议先阅读：
+
+[`AI_ENGINEERING_ROADMAP.md`](AI_ENGINEERING_ROADMAP.md)
+
+其中的“给第一次搭这个项目的人：先按最短路径走”和后续阶段教程，会从现有 `Board`、编码器和启发式 AI 出发，逐步实现：
+
+```text
+策略价值网络
+  -> 老师数据冷启动
+  -> 监督训练
+  -> 神经网络 MCTS
+  -> 自我对弈
+  -> 新旧模型评测
+```
+
 ---
 
 ## 命令行怎么玩

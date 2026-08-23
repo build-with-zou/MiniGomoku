@@ -10,3 +10,7 @@ models/*.pt
 models/checkpoints/*.pt
 Training/output/*.json
 Training/output/*.csv
+
+# Local engineering notes and training tutorials.
+AI_ENGINEERING_ROADMAP.md
+TRAINING_TUTORIAL.md
